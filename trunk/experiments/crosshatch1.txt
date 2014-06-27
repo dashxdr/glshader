@@ -1,0 +1,39 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+varying vec2 surfacePosition;
+
+// random [0;1]
+float rand(float n)
+{
+	return fract(sin(n)*31.71231);
+}
+
+void main( void ) {
+
+	vec2 pos = fract(surfacePosition*10.0);
+
+	const float n = 100.;
+	const float n2 = n / 2.0;
+	float o = 1.0;
+	const float thick = .01;
+	float cutoff = n * gl_FragCoord.x / resolution.x;
+	for(float i=0.;i<n;++i)
+	{
+		float r = rand(float(i));
+		if(abs((fract(i*.5) < .25 ? pos.x : pos.y) - r) < thick)
+		{
+			o = 0.0;
+			break;
+		}
+		if(i >= cutoff)
+			break;
+	}
+
+	gl_FragColor = vec4( o, o, o, 1.0);
+
+}
