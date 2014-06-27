@@ -1,0 +1,67 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+
+// Complex multiplication
+vec2 cm(vec2 a, vec2 b) {
+	return vec2(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x);
+}
+
+// Complex division
+vec2 cd(vec2 z1, vec2 z2) {
+	float a = z1.x;
+	float b = z1.y;
+	float c = z2.x;
+	float d = z2.y;
+	
+	return vec2((a*c+b*d)/(c*c+d*d), (b*c-a*d)/(c*c+d*d));
+}
+
+// Function f
+vec2 f(vec2 z) {
+	return cm(cm(z, z), z) - vec2(1.0, 0.0);
+}
+
+// Derivative of the function f
+vec2 df(vec2 z) {
+	return 3.0*cm(z, z);
+}
+
+vec3 newtons_method(vec2 z) {
+	const float n = 50.0;
+	for(float i=1.0; i<n; i++) {
+		vec2 fz = f(z);
+		
+		// Test for underflow
+		if(length(fz) < 10e-14) {
+			return vec3(0.0, 1.0, 0.0);
+		}
+		
+		vec2 dfz = df(z);
+		vec2 zn = z - cd(fz, dfz);
+		
+		// Test for convergence
+		if(length(zn - z) < 10e-4) {
+			if(max(z.x, z.y) > .5)
+				return vec3(z.x, z.y, 0.0);
+			return vec3(0.0, 0.0, 1.0);
+		}
+		
+		z=zn;	
+	}
+	return vec3(1.0, 0.0, 0.0);
+}
+
+vec2 transform(vec2 pos) {
+	return 5.0*pos;
+}
+varying vec2 surfacePosition;
+void main( void ) {
+	vec2 position = surfacePosition;
+	position = transform(position);
+	gl_FragColor = vec4( (newtons_method(position)), 1.0 );
+}

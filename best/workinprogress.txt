@@ -1,0 +1,53 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+uniform sampler2D TEXTURE;
+float THICK = 70.0;
+uniform float SPECI, SPECP;
+uniform vec2 resolution, mouse;
+void main()
+{
+	vec3 DIRS;
+	vec3 DIRT;
+	vec3 position = vec3((gl_FragCoord.xy-.5*resolution.xy) / resolution.xx, 0.0);
+	vec3 temp1 = position;
+	vec3 temp2 = vec3(mouse.x-.5, (mouse.y-.5)*resolution.y/resolution.x, 0.0);
+	DIRS = normalize(temp2);
+	DIRT = vec3(-DIRS.y, DIRS.x, DIRS.z);
+	float tempt = dot(temp1, DIRT) * THICK;
+	float along = dot(temp1, DIRS);
+	float sval = 1.2 * (fract(THICK*.5*along) - .5);
+	float tval = acos(tempt) / 3.1415927;
+
+	float zval = sqrt(1.0 - tempt*tempt);
+	//gl_FragDepth = 0.5 - zval*.3;
+
+	vec3 norm = DIRT * tempt + vec3(0.0, 0.0, zval);
+	float nfix = sqrt(1.0 - sval*sval);
+	norm = norm*nfix + DIRS * sval;
+	
+	vec4 specular = vec4(0.0);
+	float diffuse;
+	float off = .2;
+	vec3 lightpos = vec3(-2.0, 2.0, 8.0);
+	vec3 lightVector = lightpos - position;
+	lightVector = normalize(lightVector);
+	float nxDir = max(0.0, dot(norm, lightVector));
+	diffuse = min(nxDir + .1, 1.0);
+	if(nxDir != 0.0)
+	{
+		vec3 camerapos = vec3(0.0, 0.0, 5000.0);
+		vec3 cameraVector = normalize(camerapos - position.xyz);
+		vec3 halfVector = normalize(lightVector + cameraVector);
+		float nxHalf = max(0.0,dot(norm, halfVector));
+		float specularPower = pow(nxHalf, 40.0) * 2.0;
+		specular = vec4(1.0, 1.0, 1.0, 1.0) * specularPower;
+	}
+//	vec4 texColor = texture2D(TEXTURE, vec2(sval, tval));
+	vec4 texColor = vec4(1.0, 0.0, 0.0, 1.0);
+	if(tempt < -1.0 || tempt > 1.0 || along<0.0) gl_FragColor = vec4(0.2, 0.2, 0.5, 1.0);
+	else gl_FragColor =  diffuse * vec4(texColor.rgb,1.0) + specular;
+
+//	gl_FragColor = vec4(texColor.rgb, 1.0);
+
+}

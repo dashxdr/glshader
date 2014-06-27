@@ -1,0 +1,429 @@
+//MrMr
+//http://www.youtube.com/watch?v=Z8j_XEn9b_8
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+
+#define iGlobalTime time
+#define iResolution resolution
+
+
+vec2 Tube(vec2 pa, vec2 ba){//from iq (mod)
+	float t=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0);
+	return vec2(length(pa-ba*t),t);
+}
+
+vec2 pt[9];
+
+float DE(vec2 p){
+	float d=100.0;
+	p.y+=0.02;
+	if(p.x<0.0)p.x+=0.33;
+	if(p.x>0.0 && p.x<0.3){
+		vec2 p0=vec2(0.0);
+		for(int i=0;i<9;i++){
+			d=min(d,Tube(p-p0,pt[i]-p0).x);
+			p0=pt[i];
+		}
+	}else d=abs(p.y);
+	return d;
+}
+vec2 path(float t){
+	vec2 p=vec2(t,0.0);
+	if(t<0.0)t+=0.33;
+	if(t>0.0 && t<0.3){
+		vec2 p0=vec2(0.0);
+		for(int i=0;i<9;i++){
+			if(t>p0.x && t<pt[i].x)p.y=mix(p0.y,pt[i].y,(t-p0.x)/(pt[i].x-p0.x));
+			p0=pt[i];
+		}
+	}
+	p.y-=0.02;
+	return p;
+}
+mat3 lookat(vec3 fw,vec3 up){
+	fw=normalize(fw);vec3 rt=normalize(cross(fw,up));return mat3(rt,cross(rt,fw),fw);
+}
+vec3 ro,rd,N;
+float refl=1.0;
+vec2 n;
+vec3 WallColor(vec2 p){
+	float y=p.y;
+	p=mod(p,0.333)-0.1666;
+	n=sign(p)*(0.1666-abs(p));
+	n=n*n*n*15.0;
+	p=abs(p);
+	float d=min(p.x,p.y);
+	vec3 col=mix(vec3(0.8,1.0,0.9),vec3(0.0,0.3,0.6),clamp(d*40.0,0.0,1.0));
+	col*=smoothstep(0.15,0.175,y);
+	return col;
+}
+vec2 Seg(vec3 pS, vec3 pD, float r){//mod from iq's
+	pS=pS-ro;
+	float d=dot(rd,pD),t=clamp((dot(rd,pS)*d-dot(pS,pD))/(dot(pD,pD)-d*d),0.0,1.0);
+	pS+=pD*t;N=pS;
+	float b=dot(pS,rd);
+	if(b<0.0)return vec2(0.0);
+	float h=b*b-dot(pS,pS)+r*r;
+	return vec2(h,b-sqrt(h));
+}
+vec2 Box(vec3 z,vec3 bs){
+	z-=ro;
+	vec3 t0=(-bs-z)/rd,t1=(bs-z)/rd;
+	vec3 nr=min(t0,t1),fr=max(t0,t1);
+	float tmin=max(nr.x,max(nr.y,nr.z)),tmax=min(fr.x,min(fr.y,fr.z));
+	return vec2(tmax-tmin,-tmax);
+}
+vec4 scene2(){
+	vec2 t2=Box(vec3(0.0),vec3(1.0,1.25,3.0));
+	ro+=rd*t2.y;
+	if(abs(ro.x)>0.99)N=vec3(-sign(ro.x),0.0,0.0);
+	else if(abs(ro.y)>1.24)N=vec3(0.0,-sign(ro.y),0.0);
+	else N=vec3(0.0,0.0,-sign(ro.z));
+	vec3 scol=vec3(0.2),L=vec3(0.3,0.8,0.1);
+	if(N.z>0.5){
+		vec2 p=ro.xy;
+		float d=min(abs(p.x)-0.01,abs(p.y-0.1)-0.05);
+		scol=mix(scol,vec3(1.0,0.2,0.4),smoothstep(0.0,0.02,d));
+		p.x=abs(p.x)-0.5;p.y+=0.69;
+		p=abs(p);
+		d=max(p.x-0.24,p.y-0.26);
+		float t=min(1.0,10.0+10.0*sin(iGlobalTime+sin(iGlobalTime*3.0)*2.0));
+		scol=mix(t*vec3(1.5,1.2,1.0),scol,smoothstep(0.0,t*0.1,d));
+	}
+	scol*=(0.5+0.5*dot(N,L));
+	rd=reflect(rd,N);
+	scol+=vec3(1.0,0.2,0.7)*pow(max(0.0,dot(rd,L)),3.0);
+	return vec4(scol,max(0.5-length(scol),0.0));
+}
+vec3 scene(){
+	float tF=-ro.y/rd.y,tW=(5.0-ro.z)/rd.z,tS=(4.0-ro.x)/rd.x;
+	if(rd.x<0.0)tS=20.0;
+	if(rd.y>0.0)tF=20.0;
+	if(rd.z<0.0)tW=20.0;
+	vec3 L=vec3(0.2,0.4,-0.7),col=vec3(0.0);
+	float lit=max(0.0,Seg(vec3(3.0+sin(floor(iGlobalTime*0.2))*3.0,0.0,-7.5),vec3(0.0,5.0,0.0),1.0).x);
+	N=vec3(0.0,1.0,0.0);
+	if(tW<tF && tW<tS){
+		ro+=rd*tW;
+		col=WallColor(ro.xy);
+		N=-N.xzy+vec3(n,0.0);
+	}else if(tS<tW && tS<tF){
+		ro+=rd*tS;
+		col=WallColor(ro.zy);
+		N=N.yxz+=vec3(0.0,n.yx);
+	}else if(tF<20.0){
+		ro+=rd*tF;
+		N+=sin(ro.z*10.0+ro.x*5.0)*vec3(0.002,0.0,0.002);
+		vec2 p=abs(mod(vec2(ro.x+ro.z,ro.x-ro.z),2.0)-1.0)-0.5;
+		float d=smoothstep(-1.0,1.0,sign(p.x*p.y)*pow(abs(p.x*p.y),0.25));
+		d=min(d,smoothstep(5.0,4.9,ro.z));
+		d=min(d,smoothstep(4.0,3.9,ro.x));
+		col=vec3(d);
+	}
+	N=normalize(N);
+	col*=0.5+0.5*dot(N,L);
+	col+=10.0*lit*vec3(1.0,0.2,0.7);
+	rd=reflect(rd,N);
+	col+=vec3(1.0,0.2,0.7)*pow(max(0.0,dot(rd,L)),5.0);
+	refl*=0.3*max(abs(N.x),max(abs(N.y),abs(N.z)));
+	return col;
+}
+bool chr(float n, vec2 p) {//by movAX13h (mod.)
+	p=floor(p*vec2(4.0,-4.0)+2.5);
+	return (clamp(p.x,0.0,3.0)==p.x && clamp(p.y,0.0,4.0)==p.y && (int(mod(n/(exp2(p.x + 4.0*p.y)), 2.0)) == 1));
+}
+
+vec3 overlay(vec2 p, vec3 col){
+	vec2 c=p-vec2(-0.63,0.54);
+	const vec3 W=vec3(1.0);
+	float d=dot(c,c);
+	if(d<0.002){
+		col=vec3(0.0);
+		if(d<0.001)col=vec3(0.75,0.1,0.0);
+	}
+	c=p-vec2(-0.63,-0.54);
+	d=dot(c,c);
+	if(d<0.00225){
+		if(d>0.00075)col=vec3(0.0);
+		if(c.x>-0.01 && abs(c.y)<0.01)col=vec3(0.0); 
+		if(c.y>-0.01 && abs(c.x)<0.01)col=vec3(0.0); 
+	}
+	if(d<0.00175){
+		if(d>0.00125)col=vec3(1.0);
+		if(c.x>-0.005 && abs(c.y)<0.005)col=W; 
+		if(c.y>-0.005 && abs(c.x)<0.0025)col=W; 
+	}
+	c=p-vec2(-0.5,0.54);
+	if(chr(612247.0,c*17.0))col=W;//7+144+1792+20480+589824
+	c.x-=0.07;
+	if(chr(988959.0,c*17.0))col=W;//15+16+1792+4096+983040
+	c.x-=0.07;
+	if(chr(921886.0,c*17.0))col=W;//14+16+256+4096+917504
+	
+	c=p-vec2(0.4,0.54);
+	if(chr(921886.0,c*17.0))col=W;//7+144+1792+20480+589824
+	c.x-=0.07;
+	if(chr(630678.0,c*17.0))col=W;//6+144+3840+36864+589824
+	c.x-=0.07;
+	if(chr(349530.0,c*17.0))col=W;//10+80+1280+20480+327680
+	
+	if(max(abs(c.x-0.035)-0.006,abs(c.y+0.01)-0.03)<0.0)col=W;
+	c.x-=0.14;
+	d=139810.0;//2+32+512+8192+131072;
+	float t=mod(iGlobalTime,30.0);
+	if(t>5.0)d=149647.0;//15+128+2048+16384+131072;
+	if(t>10.0)d+=1543.0;//-9+16+512+1024;
+	if(t>15.0)d=493191.0;//7+128+1536+32768+458752;
+	if(t>20.0)d-=61425.0;//16+4096-1-65536;
+	if(t>25.0)d+=128.0;//256-128;
+	if(chr(d,c*17.0))col=W;
+	return col;
+}
+
+void main() {
+	vec2 uv=1.5*(2.0*gl_FragCoord.xy-iResolution.xy)/iResolution.x;
+	pt[0]=vec2(0.01,0.0);pt[1]=vec2(0.07,0.13);pt[2]=vec2(0.08,0.0);
+	pt[3]=vec2(0.15,0.13);pt[4]=vec2(0.16,-0.04);pt[5]=vec2(0.22,0.07);
+	pt[6]=vec2(0.26,0.07);pt[7]=vec2(0.2625,0.0);pt[8]=vec2(0.3,0.0);
+	vec3 col=vec3(0.0);
+	float itim=mod(iGlobalTime,100.0);
+	if(abs(uv.y)<0.63 && itim>1.0 && itim<10.0){
+		float tim=(itim-1.0)*0.75;
+		col=vec3(0.2,0.0,0.2);
+		vec2 p=abs(fract(uv*15.0)-0.5);
+		float d=min(p.x,p.y);
+		col+=vec3(0.2,0.1,0.2)*exp(-d*15.0);
+		d=DE(uv);
+		float t=tim-2.0;
+		p=path(t)-uv;
+		t=p.x;
+		if(t<0.0)t=100.0;
+		t=clamp(2.0-pow(t*16.0,0.25),0.25,2.0)*4.0;
+		col=max(col,t*vec3(1.0,0.3,0.8)*exp(-d*200.0));
+		col+=4.0*vec3(1.0,0.3,0.7)*exp(-length(p)*60.0);
+		col*=min(1.0,min(tim,3.75-tim));
+		col*=max(0.0,1.0-0.75*length(uv));
+	}else if(itim>10.0 && itim<40.0){
+		vec2 p=pow(abs(uv*vec2(0.9,1.0)),vec2(4.0));
+		float scrn=dot(p,p)*8.0;
+		if(scrn<1.0){
+			vec2 pt=uv;
+			float rnd=sin(iGlobalTime+2.0*sin(iGlobalTime)*3.3);
+			pt+=max(0.0,rnd-0.75)*2.0*sin(uv*vec2(1900.0,30.0)+iGlobalTime*1000.0)*max(0.0,sin(uv.y*5.0+4.0*rnd)-0.5);
+			pt.y+=sin(max(0.0,rnd-0.75)*50.0)*0.01;
+			float c=floor(iGlobalTime*0.2);
+			vec3 fw=vec3(0.1+sin(c)*0.5,-0.1+sin(c*2.0)*0.125,1.0);
+			ro=vec3(2.0+sin(c*2.0),1.0+abs(sin(c*2.3)),-3.0+abs(sin(c)*5.0));
+			rd=lookat(fw,vec3(-0.05,0.95,0.05))*normalize(vec3(pt,1.75));
+			col=scene();
+			col+=scene()*refl;
+			col*=clamp(1.0-scrn,0.0,1.0)*(1.0-clamp(rnd-0.75,0.0,1.0));
+			col=overlay(uv,col);
+		}
+	}else if(itim>40.0 && itim<50.0){
+		float st=sin(iGlobalTime);
+		ro=vec3(st*0.5,0.0,st);
+		rd=lookat(vec3(st*0.2,0.0,1.0),vec3(sin(st*0.25),cos(st*0.25),0.0))*normalize(vec3(uv,1.75));
+		vec4 c=scene2();
+		c+=scene2()*c.w;
+		c+=scene2()*c.w;
+		col=c.rgb;
+		col*=min(itim-40.0,min(1.0,50.0-itim));
+	}else if(itim>50.0 && itim<60.0){
+		col=vec3(1.0);
+		ro=vec3(-itim*2.0,1.0,itim*0.2);
+		rd=lookat(vec3(0.3+sin(itim)*0.2,-0.65,0.3),vec3(0.0,1.0,0.0))*normalize(vec3(uv,1.75));
+		float t=-ro.y/rd.y;
+		vec3 srd=rd;
+		vec2 c=floor(ro.xz+rd.xz*t);
+		float a=(c.x+c.y+sin(c.x)+cos(c.y))*2.0;
+		a+=sin(a)*itim*10.0;
+		c+=vec2(0.4,0.45)+sin(c.yx*2.0)*0.15;
+		vec3 ang=vec3(cos(a),0.0,sin(a))*0.3;
+		vec3 pS=vec3(c.x,0.05,c.y)-ang*0.5,L=vec3(0.3,0.8,0.1);
+		ro+=rd*t;rd=L;
+		vec2 t2=Seg(pS,ang,0.1);
+		col*=smoothstep(0.007,0.0,t2.x);
+		rd=srd;ro=vec3(-itim*2.0,1.0,itim*0.2);
+		t2=Seg(pS,ang,0.1);
+		if(t2.x>0.0){
+			N=normalize(rd*t2.y-N);
+			t=distance(pS,ro+rd*t2.y);
+			vec3 scol=mix(vec3(1.0,0.0,0.0),vec3(1.0),smoothstep(0.16,0.17,t));
+			scol*=(0.5+0.5*dot(N,L));
+			scol+=vec3(1.0,0.2,0.7)*pow(max(0.0,dot(reflect(rd,N),L)),3.0);
+			col=mix(col,scol,smoothstep(0.0,0.003,t2.x));
+			t=t2.y;
+		}
+		col*=exp(-0.1*t*t);
+		col*=min(itim-50.0,min(1.0,60.0-itim));
+	}else if(itim>60.0 && itim<70.0){
+		col=vec3(0.8)*min(abs(itim-65.0),min(itim-60.0,min(1.0,70.0-itim)));
+		vec2 p=uv*(1.5+uv.x*0.37);
+		float d;
+		if(itim<65.0){
+			d=min(length(p+vec2(0.68,0.81)),length(p+vec2(-0.7,0.61)));
+			d=min(d,min(length(p+vec2(0.7,-0.06)),length(p+vec2(-0.6,-0.21))));
+			d=min(d,length(p+vec2(0.0,0.2)));
+			d+=abs(sin(p.y*24.0)*0.08+sin(p.x*5.0+sin(-p.x*3.0)*17.0)*0.47);
+			float t=min((itim-62.0)*0.1,0.31);
+			col*=smoothstep(t,t+0.23,d);
+			p=uv*(1.5+uv.x*0.37);
+			p=cos(0.2)*p+sin(0.2)*vec2(p.y,-p.x);
+			float x=abs(p.x)-0.9;
+			d=Tube(vec2(x,p.y-0.48),vec2(0.0,-0.96)).x;
+			d*=d;
+			if(abs(p.x)<1.0){
+				p=sin(vec2(p.x,-p.x)*2.0)*0.5-p.yy;
+				d=min(d,min(p.x*p.x,p.y*p.y));
+			}
+		}else{
+			p=mod(p+vec2(iGlobalTime)+sin(p.yx*vec2(2.0,1.0)+vec2(iGlobalTime*4.0))*0.1,0.5);
+			d=min(max(p.x,p.y)-0.25,abs(abs(abs(p.x-p.y)-0.3125)-0.125)-0.075);
+			d=max(d,min(p.x,p.y)-0.25);
+			d+=0.05;
+		}
+		col*=smoothstep(0.025,0.05,d);
+	}else if(itim>70.0 && itim<80.0){
+		col=vec3(1.0);
+		ro=vec3(-2.0+sin(iGlobalTime),2.0,-2.0);
+		rd=lookat(vec3(0.0,0.7,0.0)-ro,vec3(0.0,1.0,0.0))*normalize(vec3(uv,1.75));
+		vec3 srd=rd;
+		float t=-ro.y/rd.y;
+		col*=exp(-0.1*t*t);
+		vec3 L=vec3(0.3,0.8,0.1);
+		ro+=rd*t;rd=L;
+		vec2 t2;
+		if(itim<75.0){t=-0.6;t2=Seg(vec3(0.0,1.0,0.0),vec3(0.0),1.0);}
+		else {t=-0.1;t2=Box(vec3(0.0,0.75,0.0),vec3(0.75));}
+		col*=smoothstep(0.5,t,t2.x);
+		rd=srd;ro=vec3(-2.0+sin(iGlobalTime),2.0,-2.0);
+		if(itim<75.0)t2=Seg(vec3(0.0,1.0,0.0),vec3(0.0),1.0);
+		else t2=Box(vec3(0.0,0.75,0.0),vec3(0.75));
+		if(t2.x>0.0){
+			float stx=t2.x;
+			N=normalize(rd*t2.y-N);
+			float sh=(0.5+0.5*dot(N,L));
+			vec3 scol=vec3(1.0,0.0,0.0);
+			if(itim<75.0){
+				float a1=atan(N.z,N.x),a2=atan(N.y,length(N.xz));
+				a2-=mod(a2,0.1);
+				a1-=mod(a1,(3.1416+2.0*abs(a2))*0.029);
+				a1+=0.053;a2+=0.037;
+				vec2 t3=Seg(vec3(cos(a1)*cos(a2),sin(a2),sin(a1)*cos(a2))*0.98+vec3(0.0,1.0,0.0),vec3(0.0),0.0);
+				N=normalize(rd*t2.y-N);
+			}else{
+				scol=vec3(0.15);
+				ro+=rd*t2.y;ro.y-=0.75;
+				srd=mod(ro,0.5)-vec3(0.25);
+				srd=sign(srd)*(vec3(0.25)-abs(srd));
+				srd=-srd*srd*srd*25.0;
+				if(ro.x<-0.749)N=vec3(1.0,srd.yz);
+				else if(ro.y>0.749)N=vec3(srd.x,1.0,srd.z);
+				else {
+					N=vec3(srd.xy,-1.0);
+					scol=mix(scol,vec3(1.0,0.4,0.5),smoothstep(0.26,0.18,length(srd.xy)));
+				}
+				sh=1.0;
+			}
+			scol*=(0.5+0.5*dot(N,L))*sh;
+			scol+=vec3(1.0,0.2,0.7)*pow(max(0.0,dot(reflect(rd,N),L)),3.0)*sh*2.0;
+			col=mix(col,scol,smoothstep(0.0,0.05,stx));
+		}
+		col*=min(abs(itim-75.0),min(itim-70.0,min(1.0,80.0-itim)));
+	}else if(itim>80.0 && itim<90.0){
+		vec2 pt=uv;	
+		if(itim<85.0){
+			pt*=vec2(0.5-pt.y*0.18,1.0)*1.5;
+			pt-=floor(sin(vec2(iGlobalTime*2.0,iGlobalTime*1.3))*2.0)*0.1;
+			pt-=vec2(0.62,0.74);
+			vec2 c=pt;
+			float r=length(pt);
+			pt=abs(pt);if(pt.y>pt.x)pt=pt.yx;
+			pt-=vec2(0.66,0.275);
+			float t=length(pt);
+			float a=atan(pt.y,pt.x)-0.38;
+			float d=abs(t-0.19)-0.01;
+			pt=abs(pt);if(pt.y>pt.x)pt=pt.yx;
+			pt-=vec2(0.13,0.19);
+			d=max(d,-abs(length(pt)-0.12)+0.03);
+			d=min(d,min(1.0-r,abs(r-0.19)));
+			d=max(d,-abs(r-1.25)+0.05);
+			col=vec3(0.8)*smoothstep(0.0,0.05,d);
+			t=clamp(1.0-min(a*a*t+t*0.3,c.y*c.y*length(c)*0.19+abs(c.x)*0.3),0.0,1.0);
+			col+=vec3(1.0)*pow(t,8.0);
+			c-=vec2(-1.5,0.75);
+			c.x=clamp(c.x,-0.11,0.11)*2.0-c.x;
+			pt=Tube(c,vec2(0.02*sin(iGlobalTime*10.0),-2.25));
+			if(col.r<0.75)col+=(0.5+0.25*sin(pt.y*70.0+0.3))*smoothstep(0.04,0.0,pt.x+sin(pt.y*70.0)*0.02);
+		}else{
+			pt-=vec2(0.36,0.0);
+			float r=length(pt),focus=0.01-sin(iGlobalTime)*0.04;
+			float d=min(1.25-r,abs(1.1-r)-0.1);
+			d=min(d,r-0.05+sin(r*71.0)*0.04);
+			d=min(d,abs(r-0.9)-0.005);
+			float a=atan(pt.y,-pt.x);
+			float ang=clamp((iGlobalTime-88.0)*100.0,-1.57,1.57)+sin(iGlobalTime*1000.0)*0.1;
+			vec2 p=vec2(-cos(ang),sin(ang))*0.9;
+			d=min(d,Tube(pt,p).x-0.01);
+			if(abs(a)<2.55){
+				float b=fract(a)-0.5;
+				d=min(d,max(abs(b)-0.01,abs(r-0.8)-0.1));
+				b=mod(a+0.25,0.5)-0.25;
+				d=min(d,max(abs(b)-0.0075,abs(r-0.85)-0.05));
+				b=mod(a+0.05,0.1)-0.05;
+				d=min(d,max(abs(b)-0.005,abs(r-0.875)-0.025));
+			}
+			col=vec3(1.0)*smoothstep(-focus,focus,d);
+		}
+		col+=vec3(1.0)-min(abs(itim-85.0),min(itim-80.0,min(1.0,90.0-itim)));
+	}else if(itim>90.0 && itim<100.0){
+		ro=vec3(0.0,0.0,-2.0);
+		rd=normalize(vec3(uv,1.75));
+		vec3 L=vec3(0.3,0.7,-0.3),LC=vec3(1.0,0.2,0.7)*2.0;
+		float focus=0.004+sin(iGlobalTime)*0.003;
+		col=vec3(-rd.x+rd.y*0.3,0.3,0.6);
+		if(itim<95.0){
+			float w=0.025,s=0.5,a=0.4+sin(iGlobalTime*2.0)*0.1;
+			vec3 p=vec3(-2.25,-1.0,0.0),dr=vec3(4.0*vec2(cos(a),sin(a)),0.5);
+			for(int i=1;i<4;i++){
+				vec2 t2=Seg(p,dr,w);
+				if(t2.x>0.0){
+					N=normalize(rd*t2.y-N);
+					float sh=max(0.0,dot(N,L));
+					vec3 scol=vec3(1.0)*(0.5+0.5*dot(N,L))*sh;
+					scol+=LC*pow(max(0.0,dot(reflect(rd,N),L)),3.0)*sh;
+					col=mix(col,scol,smoothstep(0.0,focus,t2.x/float(i*i)));
+				}
+				dr*=s;
+				s+=0.25;
+				w+=0.1;
+			}
+		}else{
+			ro.z-=2.0;
+			float t=-ro.z/rd.z;
+			vec3 p=ro+rd*t;
+			t=p.y+iGlobalTime;
+			float d=0.0;
+			if(abs(p.x)>1.5){d=sign(p.x)*3.5;t+=1.0;}
+			vec3 dr=vec3(0.42+sin(t*8.0+sin(t*4.9))*0.14,0.0,0.0);
+			vec2 t2=Seg(vec3(d-dr.x*0.5,p.y,0.0),dr,dr.x*0.5);
+			if(t2.x>0.0){
+				N=normalize(rd*t2.y-N+vec3(0.0,-p.x*p.x*0.5,0.0));
+				float sh=max(0.0,dot(N,L));
+				vec3 scol=vec3(1.5,0.3,0.5)*(0.5+0.5*dot(N,L))*sh;
+				scol+=LC*pow(max(0.0,dot(reflect(rd,N),L)),3.0)*sh;
+				col=mix(col,scol,smoothstep(0.0,focus,t2.x*0.31));
+			}
+		}
+		col*=min(abs(itim-95.0),min(itim-90.0,min(1.0,100.0-itim)));
+	}
+	
+	gl_FragColor=vec4(clamp(col,0.0,1.0),1.0);
+}

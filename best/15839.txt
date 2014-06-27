@@ -1,0 +1,33 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+
+float w=time;
+
+float o(vec3 p)
+{
+	return min(cos(p.x)+cos(p.y)+cos(p.z)+cos(p.y*20.)*.02,length(max(abs(p-vec3(cos(p.z)*.2,cos(p.z)*.2-.5,.0))-vec3(.2,.02,w+3.),vec3(0))));
+}
+
+vec3 n(vec3 p)
+{
+	return normalize(vec3(o(p+vec3(.02,0,0)),o(p+vec3(0,.02,0)),o(p+vec3(0,0,.02))));
+}
+
+void main()
+{
+	vec2 pos = ((gl_FragCoord.xy / resolution.xy)-.5)*vec2(1.7,1.);
+	vec3 s=vec3(cos(w),-cos(w*.5)*.5+.5,w);
+	vec3 e=normalize(vec3(pos,0.3));
+	vec3 p=s;
+	for(int i=0;i<55;i++)
+		p+=e*o(p);
+	vec3 pp=p+=e=reflect(e,n(p));
+	for(int i=0;i<55;i++)
+		p+=e*o(p);
+	gl_FragColor=abs(dot(n(p),vec3(.1)))+vec4(.2,cos(w*.5)*.5+.5,sin(w*.5)*.5+.5,1.)*length(p-s)*.01+length(p-s)*.01+(1.-min(pp.y+2.,1.))*vec4(1.,.8,.7,1.);
+}

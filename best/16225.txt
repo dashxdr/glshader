@@ -1,0 +1,105 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+//dashxdr was here...
+//using pixels in lower left corner to store information across frames...
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+uniform sampler2D bb;
+
+vec2 position;
+vec3 outcolor;
+
+float getcoord(int x, int y)
+{
+	vec3 color = texture2D(bb, (vec2(x, y) + .5)/resolution).rgb;
+	return floor(255.0*color.r) + 256.0*floor(255.0*color.g);
+}
+vec2 getvector(int x, int y)
+{
+	y=y*2; // 2 pixels per vector, 8 bits rgb each (only r + g are used)
+	return vec2(getcoord(x, y), getcoord(x, y+1));
+}
+void putcoord(int x, int y, float v)
+{
+	if(floor(position) == vec2(float(x), float(y)))
+	{
+		float g = floor(v/256.0);
+		float r = v-g*256.0;
+
+		outcolor = vec3(r,g,0.0)/255.0;
+	}
+}
+void putvector(int x, int y, vec2 v)
+{
+	y*=2;
+	putcoord(x, y, v.x);
+	putcoord(x, y+1, v.y);
+}
+
+vec2 dummy(int n)
+{
+	float rad = float(n)*1.0;
+	float ang = rad*.02;
+	return resolution*.5 + rad*vec2(cos(ang), sin(ang));
+}
+
+#define COUNT 20
+#define SPACE 10
+#define TOTAL (COUNT*SPACE)
+void main(void)
+{
+
+	position = gl_FragCoord.xy;
+	outcolor = vec3(1.0, 0.5, 0.0);
+
+	if(position.y < 2.0)
+	{
+		outcolor = vec3(0.0, 0.0, 0.0);
+		putvector(TOTAL, 0, vec2(65535.0, 65535.0));
+		vec2 temp;
+		temp = getvector(TOTAL, 0);
+		int x = int(position.x);
+		if(temp.x == 0.0)
+		{
+			putvector(x, 0, dummy(x));
+		} else
+		{
+			if(x>0 && x<TOTAL)
+			{
+				temp = getvector(x-1, 0);
+				putvector(x, 0,  temp);
+			}
+		}
+		putvector(0, 0, mouse*resolution);
+		gl_FragColor = vec4(outcolor, 1.0);
+		return;
+	}
+
+	float tmax = resolution.x / 20.0;
+	float tmin = tmax;
+	int mini;
+	if(getvector(TOTAL, 0).x == 0.0) // this just needed so glslsandbox has a reasonable thumbnail...
+
+		for(int i=0;i<TOTAL;i+=SPACE)
+		{
+			vec2 p = dummy(i);
+			float d = length(p-position);
+			if(d<tmin) {tmin=d;mini=i;}
+		}
+	else
+		for(int i=0;i<TOTAL;i+=SPACE)
+		{
+			vec2 p = getvector(i, 0);
+			float d = length(p-position);
+			if(d<tmin) {tmin=d;mini=i;}
+		}
+	float c = min(tmax, tmin);
+	c = (tmax-c)/tmax;
+	float rv = sin(float(mini)+1.3);
+	outcolor = vec3(fract(rv), fract(rv*33.0), fract(rv*57.0));
+
+	gl_FragColor = vec4(outcolor*c, 1.0);
+}
