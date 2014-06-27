@@ -1,0 +1,112 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+// dashxdr 20140626
+// This came from bubble writing used in ace_animpuzzle android app abortion
+// https://play.google.com/store/apps/details?id=ace.animpuzzle
+// QUESTION QUESTION QUESTION QUESTION
+// Where does everyone hang out to talk about shaders + glshadersandbox?
+
+const vec3 COLOR = vec3(1.0, 0.0, 0.0);
+const vec3 COLOR2 = vec3(1.0, 1.0, 1.0);
+const vec3 LIGHTPOS = vec3(-10.5, 10.0, 10.0);
+const float AMBIENT = .3;
+const float TSCALE = 5.0;
+const float RF = 10.0;
+
+varying vec2 surfacePosition;
+uniform float time;
+
+void closest_point(inout vec3 best, vec2 position, vec2 origin, vec2 unitx,
+				float low, float high, float k)
+{
+// find closest point on parabola
+
+	vec2 unity = vec2(-unitx.y, unitx);
+	vec2 oc = position - origin;
+	vec2 at;
+	at.x = dot(oc, unitx);
+	at.y = dot(oc, unity);
+
+	float mid;
+	for(int c=0;c<14;++c)
+	{
+		mid = (low + high) * .5;
+		float kmid = k * mid;
+		vec2 dir = vec2(1.0, 2.0 * kmid); // tangent at this point
+		vec2 off = vec2(at.x - mid, at.y - mid * kmid); // offset to this pnt
+		if(dot(dir, off)<0.0)
+			high=mid;
+		else
+			low=mid;
+	}
+	float tx, ty;
+	tx = mid;
+	ty = k * tx * tx;
+	vec2 center = origin + tx*unitx + ty*unity;
+	float d = length(center-position);
+	if(d < best.z) // z used as distance
+	{
+		best.xy = center;
+		best.z = d;
+	}
+}
+
+
+void main()
+{
+	vec2 pos = surfacePosition;
+	vec3 center = vec3(0.0, 0.0, 10000.0);
+#if 0 // Letter A
+closest_point(center, pos, vec2(0.033, 0.329), vec2(-0.996, 0.087), -0.287, 0.000, 8.187);
+closest_point(center, pos, vec2(0.033, 0.329), vec2(-0.996, 0.087), 0.000, 0.287, 8.187);
+closest_point(center, pos, vec2(-0.323, 0.012), vec2(-0.297, -0.955), -0.124, -0.063, 33.184);
+#else // question mark
+closest_point(center, pos, vec2(0.040, 0.350), vec2(-0.901, 0.434), -0.120, 0.000, 3.772);
+closest_point(center, pos, vec2(0.040, 0.350), vec2(-0.901, 0.434), 0.000, 0.228, 3.772);
+closest_point(center, pos, vec2(0.100, 0.079), vec2(0.561, 0.828), -0.134, 0.000, 3.107);
+closest_point(center, pos, vec2(0.100, 0.079), vec2(0.561, 0.828), 0.000, 0.155, 3.107);
+closest_point(center, pos, vec2(-0.132, -0.067), vec2(-0.262, -0.965), -0.095, 0.000, 11.009);
+closest_point(center, pos, vec2(-0.132, -0.067), vec2(-0.262, -0.965), 0.000, 0.077, 11.009);
+closest_point(center, pos, vec2(-0.001, -0.367), vec2(-0.073, 0.997), -0.000, 0.000, 52277340.000);
+closest_point(center, pos, vec2(-0.001, -0.367), vec2(-0.073, 0.997), 0.000, 0.000, 52277340.000);
+#endif
+
+	vec3 pos3 = vec3(pos, 0.0);
+	vec2 rad = pos3.xy - center.xy;
+	float r = length(rad);
+	float f = r * RF;
+	vec3 color;
+	if(f > 1.0)
+		color = vec3(0.0, 0.0, 0.0); // background
+	else
+	{
+		vec3 specular;
+		float diffuse;
+		float zc = sqrt(1.0 - f*f);
+		vec3 norm = vec3(rad * f / r, zc);
+
+		vec3 lightVector = LIGHTPOS - pos3;
+		lightVector = normalize(lightVector);
+		diffuse = max(0.0, dot(norm, lightVector)) + AMBIENT;
+
+		vec3 cameraVector = vec3(0.0, 0.0, 1.0);
+
+		vec3 halfVector = normalize(lightVector + cameraVector);
+		float nxHalf = max(0.0,dot(norm, halfVector));
+		float specularPower = pow(nxHalf, 40.0);
+		specular = vec3(2.0) * specularPower;
+
+		vec3 testpos = norm / RF + vec3(center.xy, 0.0);
+		testpos = testpos * vec3(TSCALE, TSCALE, TSCALE);
+		float tt = testpos.x + testpos.y + testpos.z;
+		if(fract(tt+time*.3) < .5)
+			color = COLOR2;
+		else
+			color = COLOR;
+		color = diffuse * color + specular;
+	}
+
+	gl_FragColor =  vec4(color, 1.0);
+}

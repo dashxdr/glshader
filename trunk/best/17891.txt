@@ -1,0 +1,129 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+varying vec2 surfacePosition;
+
+
+// Looking pretty good.
+// Bring it all down!
+
+float Hash( vec2 p)
+{
+	vec3 p2 = vec3(p.xy,1.0);
+    return fract(sin(dot(p2,vec3(37.1,61.7, 12.4)))*3758.5453123);
+}
+
+float noise(in vec2 p)
+{
+    vec2 i = floor(p);
+	vec2 f = fract(p);
+	f *= f * (3.0-2.0*f);
+
+    return mix(mix(Hash(i + vec2(0.,0.)), Hash(i + vec2(1.,0.)),f.x),
+			mix(Hash(i + vec2(0.,1.)), Hash(i + vec2(1.,1.)),f.x),
+			f.y);
+
+
+}
+
+float fbm(vec2 p) {
+//	p+=time;
+	float v = 0.0;
+	v += noise(p*1.)*.5;
+	v += noise(p*2.)*.25;
+	v += noise(p*4.)*.125;
+	return v;
+}
+
+void main(void) {
+
+	vec2 pos = surfacePosition;
+	pos.y += (0.6 + pos.x) * sin(pos.x * 6.0 - time * 4.0) * 0.04;
+	float shade = 0.8 + (0.6 + pos.x) * cos(pos.x * 6.0 - time * 4.0) * 0.2;
+
+	float flag=1.0;
+	vec3 color;
+	if(abs(pos.x) > .5 || abs(pos.y) > .4)
+	{
+		color = vec3(0.0);
+		flag = 0.0;
+	}
+	else if(pos.x < 0.0 && pos.y>-0.033)
+	{
+		color = vec3(0.0, 0.0, 1.0);
+		float x, y;
+		x = -pos.x * 12.0;
+		y = pos.y * 12.0 + .25;
+		vec2 t = vec2(fract(x) - .5, fract(y) - .5);
+		float d = length(t);
+		const float starsize = .32;
+		bool isstar;
+		if(d<starsize)
+			isstar = true;
+		else
+		{
+			t = vec2(fract(x + .5) - .5, fract(y + .5) - .5);
+			d = length(t);
+			if(d<starsize && x<5.5 && x>.5 && y<4.5 && y>0.5)
+				isstar = true;
+			else
+				isstar = false;
+		}
+		if(isstar)
+		{
+			// following approach seems slightly faster than atan one
+			// rotation matrix -36 degrees
+			mat2 r = mat2(.80901699,-.58778525,.58778525,.80901699);
+			mat2 r2 = r*r;
+			t.x = abs(t.x);
+			t*=r2;
+			t.x = abs(t.x);
+			t*=r2;
+			t.x = abs(t.x);
+			t*=r;
+			t.x = abs(t.x);
+			t /= starsize;
+			if(t.y < .381966 + t.x*.72654253)
+				color = vec3(1.0);
+		}
+	} else
+	{
+
+		float t = fract(20.75 + pos.y*8.0);
+		t = step(t, .5);
+		color = vec3(1.0, t, t);
+	}
+	float ctime = fract(time*.1);
+	color*=shade;
+	float d = pos.x+pos.y*0.5-0.3;
+	d+=0.5*fbm(pos*15.1);
+	d += ctime*1.3;
+	flag *= (d > 0.5) ? 0.0 : 1.0;
+	color*=flag;
+
+	if (d >0.35)
+		color = clamp((color-(d-0.35)*10.),0.0,1.0);
+	if (d >0.47)
+	{
+		float b = (d-0.4)*33.0;
+		color += flag*b*0.5*(0.0+noise(100.*pos+vec2(-time*3.,0.)))*vec3(1.5,0.5,0.0);
+	}
+pos.x += ctime;
+	float s = clamp(1.0-length((pos-vec2(0.5+0.25*pos.y*pos.y,0.7))*vec2(2.5-pos.y*pos.y,1.0)),0.0,1.0);
+	float f = clamp(1.0-length((pos-vec2(0.5+pos.y*0.1*sin(pos.y+time*10.),0.2))*vec2(4.0+pos.y*pos.y,2.0)),0.0,1.0);
+
+	s*=fbm((pos+time*vec2(-0.2,-0.4))*5.1);
+	color = mix(color,vec3(s),s*3.);
+	f*=f*fbm((pos+time*vec2(-0.0,-0.6))*10.);
+	f=f;
+
+
+	vec3 flame = clamp(f*vec3((3.0-pos.y)*2.0,(1.3-pos.y)*2.0,pos.y-2.0),0.0,1.0);
+	color+=flame;
+
+	gl_FragColor = vec4(color, 1.0);
+}

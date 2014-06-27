@@ -1,0 +1,60 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+//dashxdr 20140617: ripple effect
+
+uniform float time;
+uniform vec2 resolution;
+uniform vec2 mouse;
+uniform sampler2D bb;
+varying vec2 surfacePosition;
+
+void main( void )
+{
+	if(time<.1 || mouse.y > .95)
+	{
+		gl_FragColor = vec4(0.0, 0.0, 0.0, 0.5);
+		return;
+	}
+
+	vec2 tpos = gl_FragCoord.xy;
+	vec2 fixedpos = (tpos - resolution*.5) / resolution.xx;
+	vec2 position;
+	position = (mouse * resolution - tpos) / resolution.xx;
+
+	float val = step(length(position), .01);
+
+	float xl, x, xr;
+	float yu, y, yd;
+
+	x = tpos.x / resolution.x;
+	xl = (gl_FragCoord.x - 1.0) / resolution.x;
+	xr = (gl_FragCoord.x + 1.0) / resolution.x;
+	y = tpos.y / resolution.y;
+	yd = (gl_FragCoord.y - 1.0) / resolution.y;
+	yu = (gl_FragCoord.y + 1.0) / resolution.y;
+
+	vec4 up, down, left, right, at;
+
+	at = texture2D(bb, vec2(x, y));
+	up = texture2D(bb, vec2(x, yu));
+	down = texture2D(bb, vec2(x, yd));
+	left = texture2D(bb, vec2(xl, y));
+	right = texture2D(bb, vec2(xr, y));
+
+	float f;
+	f = left.r + right.r + up.r + down.r - 4.0 * at.r;
+
+	float k;
+//	k = max(abs(fixedpos.x), abs(fixedpos.y));
+//	k = -step(k, .1)*.05 + .5;
+	k = .1;
+	at.w += k * f;
+	at.r += at.w - .5;
+	at.r = max(val, at.r);
+//	at.w = max(val*.9, at.w);
+	at.gb = at.r * vec2(.6666, .0);
+
+	gl_FragColor = at;
+}

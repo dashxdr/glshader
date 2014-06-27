@@ -1,0 +1,25 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+varying vec2 surfacePosition;
+
+void main () {
+	vec3 col = vec3(0.0);
+	vec2 p = surfacePosition*(6.+sin(time/8.)*5.9);
+	float t = time-(log(length(p)*length(p)));
+	for(float i=1.; i<12.; i+=1.)
+	{
+        	float fac = pow(4.,i);
+	
+		t/=sqrt(fac); 
+		vec2 pos =  (sin(p*fac)*(4.+sin(t)*4.));
+		float d2D = 1.0 / length (pos*(2.)) + t/(fac*i);
+		float a2D = (atan (pos.y, pos.x) + sin (t * 0.2) * 3.14159)+(log(length(pos)*sin(d2D+t)))*sin(t/fac)*3.;
+		col += (vec3(0.5 + sin (d2D * 8.0) * 0.5, 0.5 + sin (a2D * 8.0) * 0.5, 0.5 + sin (d2D * 4.0) * sin (a2D * 4.0) * 0.5)/(0.25/length(pos)+1.0))/(fac/i);
+	}
+	
+	
+	gl_FragColor = vec4 (col, 1.0);
+}

@@ -1,0 +1,61 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+//dashxdr
+// showing the points while performing the mandelbrot function
+
+uniform float time;
+uniform vec2 resolution;
+uniform vec2 mouse;
+uniform sampler2D bb;
+varying vec2 surfacePosition;
+
+void main( void )
+{
+
+	float sum = 0.0;
+	float size = .0025;
+	vec2 tpos = gl_FragCoord.xy;
+
+	vec2 position;
+
+	position=vec2(0.5);
+	position = (mouse * resolution - tpos) / resolution.xx;
+
+	sum = step(length(position), .02);
+
+	float val = sum;
+
+	float xl, x, xr;
+	float yu, y, yd;
+
+	x = tpos.x / resolution.x;
+	xl = (gl_FragCoord.x - 1.0) / resolution.x;
+	xr = (gl_FragCoord.x + 1.0) / resolution.x;
+	y = tpos.y / resolution.y;
+	yd = (gl_FragCoord.y - 1.0) / resolution.y;
+	yu = (gl_FragCoord.y + 1.0) / resolution.y;
+
+	float v00, v01, v02;
+	float v10, v11, v12;
+	float v20, v21, v22;
+
+	float diag = .70710678;
+
+	v00 = texture2D(bb, vec2(xl, yu)).r * diag;
+	v01 = texture2D(bb, vec2(x, yu)).r;
+	v02 = texture2D(bb, vec2(xr, yu)).r * diag;
+	v10 = texture2D(bb, vec2(xl, y)).r;
+	v11 = texture2D(bb, vec2(x, y)).r;
+	v12 = texture2D(bb, vec2(xr, y)).r;
+	v20 = texture2D(bb, vec2(xl, yd)).r * diag;
+	v21 = texture2D(bb, vec2(x, yd)).r;
+	v22 = texture2D(bb, vec2(xr, yd)).r * diag;
+
+	float v = (v00+v01+v02+v10+v11+v12+v20+v21+v22) / 6.8;
+
+	v = max(v, val);
+
+	gl_FragColor = vec4(v*vec3(1.0, .6666, 0.0), 1.0);
+}

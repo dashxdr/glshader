@@ -1,0 +1,90 @@
+#ifdef GL_ES
+precision highp float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+uniform sampler2D backbuffer;
+
+// Red channel is command channel; may issue these commands to a living node
+float stay = 1.0 / 255.0;
+float goN = 2.0 / 255.0;
+float goS = 3.0 / 255.0;
+float goW = 4.0 / 255.0;
+float goE = 5.0 / 255.0;
+float splitN = 6.0 / 255.0;
+float splitS = 7.0 / 255.0;
+float splitW = 8.0 / 255.0;
+float splitE = 9.0 / 255.0;
+
+// Blue channel indicates how much water (food?) is at a pixel
+
+// Green channel indicates strength of life node at that pixel (0 = dead)
+
+void main( void ) {
+	vec2 position = ( gl_FragCoord.xy / resolution.xy );
+	vec2 pixel = 1./resolution;
+	vec4 me = texture2D(backbuffer, position);
+	float rnd1 = mod(fract(sin(dot(position + time * 0.001, vec2(14.9898,78.233))) * 43758.5453), 1.0);
+
+	if (me.r == 0.0) {
+		me.b = 0.9 + 0.45 * rnd1 - 2.2 * length(position-vec2(0.5, 0.5));
+		me.r = 0.004;
+		if (length(position-vec2(0.5, 0.5)) < 0.03) {
+			me.g = rnd1;
+		}
+	} else {
+		float drinkrate = 0.33;
+		float starverate = 0.05;
+		float splitthreshold = 0.35;
+		float waterrate = (0.5 + 0.1) / 255.0;
+
+		vec4 toS = texture2D(backbuffer, position + pixel * vec2(1., 0.));
+		vec4 toN = texture2D(backbuffer, position + pixel * vec2(-1., 0.));
+		vec4 toE = texture2D(backbuffer, position + pixel * vec2(0., 1.));
+		vec4 toW = texture2D(backbuffer, position + pixel * vec2(0., -1.));
+
+		float life = 0.0;
+		if (me.r == stay) {life += me.g;}
+		if (me.r == splitN) {life += me.g * 0.5;}
+		if (me.r == splitS) {life += me.g * 0.5;}
+		if (me.r == splitW) {life += me.g * 0.5;}
+		if (me.r == splitE) {life += me.g * 0.5;}
+		if (toN.r == goS) {life += toN.g;}
+		if (toS.r == goN) {life += toS.g;}
+		if (toW.r == goE) {life += toW.g;}
+		if (toE.r == goW) {life += toE.g;}
+		if (toN.r == splitS) {life += toN.g * 0.5;}
+		if (toS.r == splitN) {life += toS.g * 0.5;}
+		if (toW.r == splitE) {life += toW.g * 0.5;}
+		if (toE.r == splitW) {life += toE.g * 0.5;}
+
+		float original_b = me.b;
+		me.b *= 1.0 - (drinkrate * life);
+		float consumed = original_b - me.b;
+		life += consumed - starverate;
+
+		// find best water source
+		float dir = stay;
+		float max = me.b;
+		if (toN.b > max) {max = toN.b; dir = goN;}
+		if (toS.b > max) {max = toS.b; dir = goS;}
+		if (toE.b > max) {max = toE.b; dir = goE;}
+		if (toW.b > max) {max = toW.b; dir = goW;}
+
+		if ((life > splitthreshold) && (me.b > drinkrate)) {
+			if (dir == goN) {dir = splitN;}
+			if (dir == goS) {dir = splitS;}
+			if (dir == goW) {dir = splitW;}
+			if (dir == goE) {dir = splitE;}
+		}
+
+		me.r = dir;
+		me.g = life;
+		if ((position.x > 0.01) && (position.x < 0.99) && (position.y > 0.01) && (position.y < 0.99)) {
+			me.b += rnd1*waterrate;
+		}
+	}
+	gl_FragColor = me;
+}

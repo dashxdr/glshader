@@ -1,0 +1,414 @@
+#ifdef GL_ES
+precision mediump float; 
+#endif
+
+//circle tracer mk. 2
+//sphinx
+
+uniform float 		time;
+uniform vec2 		mouse;
+uniform vec2 		resolution;
+uniform sampler2D 	renderbuffer;
+
+#define aspect    (resolution.x/resolution.y)
+#define pi        (4.*atan(1.))
+#define phi       .01
+#define epsilon   .01
+#define farplane  2.
+
+#define rays 3
+#define maxsteps 32
+
+#define origin vec2(-1.,  0.)
+
+struct ray
+{
+    vec2 o, p, d;  //origin, position, direction
+    float e;       //energy
+    bool h;        //hit
+};
+
+struct graph
+{
+    vec3 c;                  //color
+    float r, e, f, i, s, h;  //ray, energy, field, isosurface, hit, steps
+};    
+  
+vec2	toworld(vec2 p);
+float   map(in vec2 p);
+vec2    derive(in vec2 p);
+
+void    emit(inout ray r, inout graph g, in vec2 p, const in int it);
+void    absorb(inout ray r, inout graph g, in vec2 p, in float e, in float a, in float s, const in int it);
+
+vec2    scatter(vec2 d, in float s);
+
+graph   graphray(in ray r, in vec2 p, graph g);
+graph   graphintersect(in ray r, in vec2 p, graph g);
+graph   graphmap(in vec2 p, graph g);
+
+float	line(in vec2 p, in vec2 a, in vec2 b, in float w);
+float   ring(in vec2 p, in float r, in float w);
+float   circle(in vec2 p, in float r, in float w);
+vec3    hsv(in float h, in float s, in float v);
+
+float   hash(float u);
+vec4    hash(vec4 v);
+float   smooth(float u);
+vec2    smooth(vec2 uv);
+float   blend(in vec4 l, in vec4 v);
+void    lattice(in vec2 uv, out vec4 l, out vec4 v);
+float   noise(in vec2 uv);
+float   fbm(float a, vec2 f, vec2 p, vec2 uv);
+
+mat2    rmat2(float t);
+
+void main( void ) 
+{	
+    vec2 uv = gl_FragCoord.xy/resolution.xy;
+    vec2 p	= toworld(uv);
+	
+    ray r;
+   
+    graph g;
+    g.c = vec3(0.);
+    g.r = 0.;
+    g.e = 0.;
+    g.f = 0.;
+    g.i = 0.;
+    g.s = 0.;
+    g.h = 0.;
+    
+    vec2 m   = toworld(mouse);
+    
+    float fov   = .25;
+    float s     = fov/(float(rays));
+    float t     = -fov+.5*fov;
+    
+    float e = map(origin);
+    for(int i = 0; i < rays; i++)
+    {
+        r.o    = origin;
+        r.p    = r.o;
+        r.d    = normalize(m-r.o+vec2(0., t));
+        r.e    = e;
+        r.h    = false;
+        
+        g.s    = 0.;
+        if(i < rays)
+        {
+            emit(r, g, p, 8);
+            if(r.h)
+            {
+                vec2 hp = r.p;
+                
+                #define reflection
+                #ifdef reflection
+                r.d    = reflect(r.d, derive(hp));
+                r.o    = hp+r.d*.05;
+                r.p    = r.o;
+                r.e    = .05;
+                r.h    = false;
+                emit(r, g, p, 6);
+                #endif
+            
+                #define refraction
+                #ifdef refraction
+                float ri   = .15;
+                float a    = .9;   //absorption
+                float e    = .1;   //initial energy
+                float s    = 0.1;  //internal scattering
+                r.d        = refract(r.d, derive(hp), ri);
+                r.o        = hp+r.d*.05;
+                r.p        = r.o;
+                r.e        = .0;
+                r.h        = false;
+                absorb(r, g, p, e, a, s, 8);
+                
+                if(r.h)
+                {
+                    vec2 n     = derive(r.p);
+                    
+                    r.d        = refract(r.d, -n, ri);
+                    r.p        = r.o+r.d*phi*.05;
+                    r.e        = phi*2.;
+                    r.h        = false;
+                    emit(r, g, p, 8);
+                }
+                #endif
+            }
+        }
+        t += s;
+    }
+    
+    g = graphmap(p, g);
+    
+    vec4 result = vec4(g.c, 1.);
+     
+    gl_FragColor = result;
+}//sphinx
+
+vec2 toworld(vec2 p)
+{
+    p = p * 2. - 1.;
+    p.x *= aspect;
+    return p;
+}
+
+float map(vec2 p)
+{
+    vec2 o      = vec2(.75, 0.);
+
+    //circle
+    vec2 cp     = p-o;
+    float c     = length(cp)-.5;
+    
+    //noisy circle
+    vec2 np     = (p-o) * rmat2(time*.1);
+    float nc    = length(np)-.5;;
+    float ns    = .25;
+    
+    //no bueno
+    //float n     = length(p)<nc-ns ? 0. : clamp(fbm(.5, vec2(8.), np, np - vec2(2., 0.)), 0., 1.)*ns-ns*.75;
+    //nc          = nc-n;
+    
+    float n     = clamp(fbm(.5, vec2(8.), np, np - vec2(2., 0.)), 0., 1.)*ns-ns*.75;
+    nc          = mouse.y > .5 ? min(max(-nc+ns, nc), nc-n) : nc-n;;
+        
+    //plane    
+    float px    = 1.85-p.x;
+    
+    //lenses
+    vec2 l0p    = abs((p-o)*vec2(1., .75));
+    float l0    = length(l0p+vec2(.5, 0.))-.6;
+    
+    vec2 l1p    = abs((p-o)*vec2(1., .75))-vec2(.75, 0.);
+    float l1    = max(-length(l1p)+.5, length(p-o)-.65);
+    
+    float l     = max(c, mix(l0, l1, cos(time)*.5+.5));
+    
+    //result
+    float r     = farplane;
+
+    //r           = min(r, c);
+    //r           = min(r, nc);
+    //r           = min(r, px + n*2.);
+    //r           = min(r, l0);
+    //r           = min(r, l1);
+    r           = min(r, l);
+    r           = min(r, px);
+    return r;
+}
+
+void emit(inout ray r, inout graph g, in vec2 p, const in int m)
+{   
+    for(int i = 0; i < maxsteps; i++)
+    {
+        if(i == m)
+        {
+             break;
+        }
+        g.s++;
+        if(r.e < farplane)
+        {
+            r.p = r.o + r.d * r.e;
+            g = graphray(r, p, g);     
+            if(phi > r.e)
+            {
+                r.h = true;
+                g = graphintersect(r, p, g);
+                break;
+            }
+            r.e = map(r.p); 
+            r.o = r.p;  
+        }
+    }
+    g = graphray(r, p, g);      
+}
+
+void absorb(inout ray r, inout graph g, in vec2 p, in float e, in float a, in float s, const in int m)
+{    
+    for(int i = 0; i < maxsteps; i++)
+    {
+        if(i == m)
+        {
+             break;
+        }
+        g.s++;        
+        if(r.e < farplane)
+        {
+            r.p = r.o + r.d * e;
+            g = graphray(r, p, g);    
+            e *= a;
+            if(r.e > 0.)
+            {
+                r.h = true;
+                r.e = map(r.p); 
+                r.o = r.p;
+                 g = graphray(r, p, g);    
+                r.o = r.o - r.d * r.e;
+                r.p = r.o;
+                g = graphintersect(r, p, g);
+                
+                break;
+            }
+            r.d = scatter(r.d,s*r.e);
+            r.e = map(r.p); 
+            r.o = r.p;
+        }
+    }
+    g = graphray(r, p, g); 
+}
+
+vec2 scatter(vec2 d, in float s){
+     d += (vec2(hash(d.x),hash(d.y))-.5)*s;
+     return normalize(d);   
+}
+
+vec2 derive(vec2 p){
+	vec2 e = vec2(0., epsilon);
+    vec2 n;
+	n.x = map(p+e.yx)-map(p-e.yx);
+	n.y = map(p+e.xy)-map(p-e.xy);
+    return normalize(n);
+}
+
+graph graphray(in ray r, in vec2 p, graph g)
+{
+    float gr = line(p,  r.o, r.p, .0075);
+    gr       = max(gr, circle(p-r.o, .01, .0025));
+    float ge = ring(r.o - p, abs(r.e), .025);
+    
+    g.r      = max(g.r, gr); 
+    g.e      = max(g.e, ge);
+    
+    g.c      = max(g.c, (gr + ge) * hsv(.65-g.s*.1, 1., 1.));
+    return g;
+}
+
+graph graphintersect(in ray r, in vec2 p, graph g)
+{
+    float c  = circle(p - r.p, .025, .15);
+    float f  = map(p);
+    c        *= float(abs(f) < phi);
+  
+    g.h      = max(g.h, c);
+
+    g.c      = max(g.c, .75 * c * hsv(.65-g.s*.1, 1., 1.));
+
+    return g;
+}
+
+graph graphmap(in vec2 p, graph g)
+{
+    g.f     = map(p);
+    g.c.rg  += g.f < phi && g.f+phi > phi? .25 : 0.;
+    
+    float a = g.f > phi ? fract(g.f*4.) : 0.;
+    float w = .025;
+    a       = 1.-max(smoothstep(a-w, w, w-a),smoothstep(-a+w, w, a));
+    
+    g.i     = g.f > phi ? min(1., a * 32.) : abs(.5-g.f)-a;
+    g.i     *= .75;
+    
+    g.c     = max(g.c, g.f * vec3(0., 0., .25+a));
+    g.c     = max(g.c, g.i * vec3(.0, .5, .0));
+    return g;
+}
+
+float circle(vec2 p, float r, float w)
+{
+	return smoothstep(w, 0., length(p)-r);
+}
+
+float ring(vec2 p, float r, float w)
+{
+    float l = length(p)-r+w*.5;
+    l = 1.-max(smoothstep(l-w, w, w-l),smoothstep(-l+w, w, l));
+	return clamp(l, 0., 1.);
+}
+
+float line(vec2 p, vec2 a, vec2 b, float w)
+{
+	if(a==b)return(0.);
+	float d = distance(a, b);
+	vec2  n = normalize(b - a);
+    vec2  l = vec2(0.);
+	l.x = max(abs(dot(p - a, n.yx * vec2(-1.0, 1.0))), 0.0);
+	l.y = max(abs(dot(p - a, n) - d * 0.5) - d * 0.5, 0.0);
+	return clamp(smoothstep(w, 0., l.x+l.y), 0., 1.);
+}
+
+vec3 hsv(float h,float s,float v)
+{
+	return mix(vec3(1.),clamp((abs(fract(h+vec3(3.,2.,1.)/3.)*6.-3.)-1.),0.,1.),s)*v;
+}
+
+float hash(float u)
+{
+    return fract(sin(u)*43758.5453123);
+}
+
+vec4 hash(vec4 v)
+{
+    return fract(vec4(hash(v.x), hash(v.y), hash(v.z), hash(v.w))*-1234.5678);
+}
+
+float smooth(float u)
+{
+    return u*u*(3.-2.*u);
+}
+
+vec2 smooth(vec2 uv)
+{
+    return uv*uv*(3.-2.*uv);
+}
+
+float blend(in vec4 l, in vec4 v)
+{
+    l.x = mix(v.x, v.y, l.z);
+    l.y = mix(v.z, v.w, l.z);
+    return mix(l.x, l.y, l.w);
+}   
+
+void lattice(in vec2 uv, out vec4 l, out vec4 v)
+{
+    const float k = 257.;
+    l.xy = floor(uv);
+    l.zw = fract(uv);
+    l.zw = smooth(l.zw);
+    float u = l.x + l.y * k;
+    v = vec4(u, u+1.,u+k, u+k+1.);
+}
+
+float noise(in vec2 uv)
+{
+    vec4 v = vec4(0.);
+    vec4 l = vec4(0.);
+    lattice(uv, l, v);
+    v = hash(v);
+    return blend(l, v);
+}
+ 
+#define octaves 3
+float fbm(float a, vec2 f, vec2 p, vec2 uv)
+{
+    float n = 0.;
+    uv += 31.;
+    float s = -1.;
+    for(int i = 0; i < octaves; i++)
+    {
+        n += noise(uv*f+p)*a;
+        a *= .5;
+        f *= 2.;
+        p -= p/f;
+    }
+    return n;
+}
+
+mat2 rmat2(float t)
+{
+    float c = cos(t);
+    float s = sin(t);   
+    return mat2(c,s,-s,c);
+}
