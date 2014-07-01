@@ -1,0 +1,50 @@
+//sunflower seed fibonacci spiral
+// 18072
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+varying vec2 surfacePosition;
+
+const float dotSize = 0.003;
+const float blur = 0.003;
+const float radius = .011;
+const vec3 black = vec3(0.0, 0.0, 0.0);
+const vec3 white = vec3(1.0, 1.0, 1.0);
+
+const float phiPi = 5.083203692;
+
+void main( void ) {
+
+	vec2 p=surfacePosition*.5;
+
+	//there has to be a better way than this to calculate nearest seed posn
+	vec3 col = vec3(0);
+	for(float i = 1.; i < 200.; i++){
+		float ang = 2.*phiPi*i;//*time/1000.; //animate spirality
+		float rad = radius* sqrt(i);
+		vec2 seedPos = vec2(rad * cos(ang),rad*sin(ang));
+		float dist = distance(p,seedPos);
+		col += mix(white, black, smoothstep(dotSize, dotSize + blur, dist));;
+	}
+	// maybe something like this:
+	float r = length(p)/radius;
+	r = floor(r*r);
+	float best = 10000.0;
+	const float range = 9.0;
+	for(float i = -range;i<=range;++i)
+	{
+		float rt = r+i;
+		float a = 2.*phiPi*rt;
+		rt = radius * sqrt(rt);
+		vec2 seedPos = rt*vec2(cos(a), sin(a));
+		best=min(best, distance(p, seedPos));
+	}
+	if(best<.003) col = vec3(1.0, 0.0, 0.0);
+
+	gl_FragColor = vec4(col,1.0);
+}
