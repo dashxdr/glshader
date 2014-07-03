@@ -1,0 +1,32 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+// gridwarp by dashxdr 20140703
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+varying vec2 surfacePosition;
+uniform vec2 surfaceSize;
+
+void main( void ) {
+	vec2 p = surfacePosition;
+
+	vec2 pull = (mouse - .5) * surfaceSize;
+	pull -= p;
+	float l2 = dot(pull, pull);
+	pull = normalize(pull) / l2;
+
+	p -= pull * .0005;
+
+	vec2 pf = fract(p*16.0);
+	pf -= .5;
+	pf = abs(pf);
+
+	float c = pow(1.0-min(pf.x,pf.y), 8.0);
+
+	gl_FragColor = vec4(c*vec3(1.0, 0.6, 0.2), 1.0);
+
+}
+
