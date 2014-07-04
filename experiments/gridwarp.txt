@@ -10,10 +10,12 @@ uniform vec2 resolution;
 varying vec2 surfacePosition;
 uniform vec2 surfaceSize;
 
-vec2 pull;
+vec2 pull, pos, deltaxy;
+float c;
 
-float getval(vec2 p)
+void getval(vec2 off)
 {
+	vec2 p = pos + off*deltaxy;
 	vec2 t = pull-p;
 	float l2 = dot(t, t);
 
@@ -24,34 +26,33 @@ float getval(vec2 p)
 	vec2 pf = fract(p*16.0);
 	pf -= .5;
 	pf = abs(pf);
-	return pow(1.0-min(pf.x,pf.y), 8.0);
+	c += pow(1.0-min(pf.x,pf.y), 8.0);
 }
 
 void main( void ) {
-	vec2 p = surfacePosition;
-
+	pos = surfacePosition;
 	pull = (mouse - .5) * surfaceSize;
-	vec2 deltaxy = vec2(.333)*surfaceSize/resolution;
+	deltaxy = surfaceSize/resolution;
 
-//	vec2 r = gl_FragCoord.xy/resolution;
-//	deltaxy *= fract(sin(dot(r, vec2(12.9898, 78.233)))* 43758.5453);
+	c = 0.0;
+	getval(vec2(0.4810, 0.5440));
+	getval(vec2(0.2003, 0.2367));
+	getval(vec2(0.2866, 0.6909));
+	getval(vec2(0.3334, 0.9085));
+	getval(vec2(0.9082, 0.5552));
+	getval(vec2(0.4955, 0.1068));
+	getval(vec2(0.7153, 0.6924));
+	getval(vec2(0.2730, 0.8854));
+	getval(vec2(0.8140, 0.3711));
+	getval(vec2(0.6920, 0.1251));
+	getval(vec2(0.0895, 0.0865));
+	getval(vec2(0.9346, 0.5656));
+	getval(vec2(0.3209, 0.0549));
+	getval(vec2(0.9275, 0.6132));
+	getval(vec2(0.9369, 0.8623));
+	getval(vec2(0.4064, 0.6553));
 
-	float c = getval(p);
-#if 1
-	c += getval(p + vec2(deltaxy.x, 0.));
-	c += getval(p + vec2(-deltaxy.x, 0.));
-	c += getval(p + vec2(0., deltaxy.y));
-	c += getval(p + vec2(0., -deltaxy.y));
-
-	c += getval(p + vec2(deltaxy.x, deltaxy.y));
-	c += getval(p + vec2(-deltaxy.x, deltaxy.y));
-	c += getval(p + vec2(deltaxy.x, -deltaxy.y));
-	c += getval(p + vec2(-deltaxy.x, -deltaxy.y));
-#else
-	c *= 9.0;
-#endif
-
-	gl_FragColor = vec4(c*.11111*vec3(1.0, 0.6, 0.2), 1.0);
+	gl_FragColor = vec4(c/16.*vec3(1.0, 0.6, 0.2), 1.0);
 
 }
 
