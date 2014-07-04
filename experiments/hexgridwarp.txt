@@ -1,0 +1,58 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+// gridwarp by dashxdr 20140703
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+varying vec2 surfacePosition;
+uniform vec2 surfaceSize;
+
+vec2 pull, pos, deltaxy;
+float m;
+
+void getval(vec2 off)
+{
+	vec2 p = pos + off*deltaxy;
+	vec2 t = pull-p;
+	float l2 = dot(t, t);
+
+	t = normalize(t) / l2;
+
+	p -= t * .0005;
+
+	p *=16.0;
+
+	vec2 q = vec2(fract(p.x), mod(p.y, 1.7320508)); // sqrt(3)
+	q = abs(q - vec2(.5,.8660254)); // sqrt(3)/2
+
+	if(q.y>=.4330127) // sqrt(3)/4
+		q = vec2(.5, .8660254) - q;
+	const float k = .28867513; // sqrt(3)/6
+	const float a = -3.1415927/3.0; // -60 degrees
+	float m1 = abs(dot(q - vec2(0., k), vec2(cos(a), sin(a))));
+	if(q.y<k) m1 = min(m1, q.x);
+
+	vec2 pf = fract(p);
+	pf = abs(pf-.5);
+	float m2 = min(pf.x, pf.y);
+
+	m1 = pow(1.0-m1, 16.0);
+	m2 = pow(1.0-m2, 16.0);
+	m = mix(m1, m2,  mouse.x < .5 ? 1.0 : 0.0);
+
+}
+
+void main( void ) {
+	pos = surfacePosition;
+	pull = (mouse - .5) * surfaceSize;
+	deltaxy = surfaceSize/resolution;
+
+	getval(vec2(0., 0.));
+
+	gl_FragColor = vec4(m*vec3(1.0, 0.6, 0.2), 1.0);
+
+}
+
