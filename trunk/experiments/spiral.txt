@@ -16,7 +16,7 @@ const float radius = .011;
 const vec3 black = vec3(0.0, 0.0, 0.0);
 const vec3 white = vec3(1.0, 1.0, 1.0);
 
-const float phiPi = 5.083203692;
+const float phiPi = 2.0*5.083203692;
 
 void main( void ) {
 
@@ -24,27 +24,34 @@ void main( void ) {
 
 	//there has to be a better way than this to calculate nearest seed posn
 	vec3 col = vec3(0);
-	for(float i = 1.; i < 200.; i++){
-		float ang = 2.*phiPi*i;//*time/1000.; //animate spirality
+	for(float i = 1.; i < 1.; i++){
+		float ang = phiPi*i;//*time/1000.; //animate spirality
 		float rad = radius* sqrt(i);
 		vec2 seedPos = vec2(rad * cos(ang),rad*sin(ang));
 		float dist = distance(p,seedPos);
-		col += mix(white, black, smoothstep(dotSize, dotSize + blur, dist));;
+		col += mix(white, black, smoothstep(dotSize, dotSize + blur, dist));
 	}
 	// maybe something like this:
-	float r = length(p)/radius;
+	float rat = length(p);
+	float r = rat/radius;
 	r = floor(r*r);
 	float best = 10000.0;
-	const float range = 9.0;
-	for(float i = -range;i<=range;++i)
+	const int range = 100;
+	for(int j = 0;j<2;++j)
 	{
-		float rt = r+i;
-		float a = 2.*phiPi*rt;
-		rt = radius * sqrt(rt);
-		vec2 seedPos = rt*vec2(cos(a), sin(a));
-		best=min(best, distance(p, seedPos));
+		float dir = 1.0 - 2.0 * float(j);
+		for(int i = j;i<=range;++i)
+		{
+			float rt = r+float(i)*dir;
+			float a = phiPi*rt;
+			rt = radius * sqrt(rt);
+			if(abs(rt-rat) > dotSize*2.0)
+				break;
+			vec2 seedPos = rt*vec2(cos(a), sin(a));
+			best=min(best, distance(p, seedPos));
+		}
 	}
-	if(best<.003) col = vec3(1.0, 0.0, 0.0);
+	col = mix(white, black, smoothstep(dotSize, dotSize + blur, best));
 
 	gl_FragColor = vec4(col,1.0);
 }
