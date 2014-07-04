@@ -1,0 +1,57 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+// gridwarp by dashxdr 20140703
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+varying vec2 surfacePosition;
+uniform vec2 surfaceSize;
+
+vec2 pull;
+
+float getval(vec2 p)
+{
+	vec2 t = pull-p;
+	float l2 = dot(t, t);
+
+	t = normalize(t) / l2;
+
+	p -= t * .0005;
+
+	vec2 pf = fract(p*16.0);
+	pf -= .5;
+	pf = abs(pf);
+	return pow(1.0-min(pf.x,pf.y), 8.0);
+}
+
+void main( void ) {
+	vec2 p = surfacePosition;
+
+	pull = (mouse - .5) * surfaceSize;
+	vec2 deltaxy = vec2(.333)*surfaceSize/resolution;
+
+//	vec2 r = gl_FragCoord.xy/resolution;
+//	deltaxy *= fract(sin(dot(r, vec2(12.9898, 78.233)))* 43758.5453);
+
+	float c = getval(p);
+#if 1
+	c += getval(p + vec2(deltaxy.x, 0.));
+	c += getval(p + vec2(-deltaxy.x, 0.));
+	c += getval(p + vec2(0., deltaxy.y));
+	c += getval(p + vec2(0., -deltaxy.y));
+
+	c += getval(p + vec2(deltaxy.x, deltaxy.y));
+	c += getval(p + vec2(-deltaxy.x, deltaxy.y));
+	c += getval(p + vec2(deltaxy.x, -deltaxy.y));
+	c += getval(p + vec2(-deltaxy.x, -deltaxy.y));
+#else
+	c *= 9.0;
+#endif
+
+	gl_FragColor = vec4(c*.11111*vec3(1.0, 0.6, 0.2), 1.0);
+
+}
+
