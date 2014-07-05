@@ -42,8 +42,8 @@ float lf(vec2 nm)
 
 vec2 kernel(vec2 p)
 {
-	vec2 w;
-	vec2 tw;
+	vec2 w=vec2(0.0);
+	vec2 tw=vec2(0.0);
 	for(float y = -or;y <= or;y++)
 	{
 		for(float x = -or;x <= or;x++)
