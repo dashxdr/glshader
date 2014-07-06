@@ -3,6 +3,7 @@ precision mediump float;
 #endif
 
 // gridwarp by dashxdr 20140703
+// http://glsl.heroku.com/e#18110
 
 uniform float time;
 uniform vec2 mouse;
