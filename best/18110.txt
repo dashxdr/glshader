@@ -3,30 +3,80 @@ precision mediump float;
 #endif
 
 // gridwarp by dashxdr 20140703
+// http://glsl.heroku.com/e#18110
 
 uniform float time;
 uniform vec2 mouse;
 uniform vec2 resolution;
 varying vec2 surfacePosition;
 uniform vec2 surfaceSize;
+uniform sampler2D bb;
 
-void main( void ) {
-	vec2 p = surfacePosition;
+vec2 pull, pos, deltaxy;
+float m;
 
-	vec2 pull = (mouse - .5) * surfaceSize;
-	pull -= p;
-	float l2 = dot(pull, pull);
-	pull = normalize(pull) / l2;
+void getval(vec2 off, bool dohex)
+{
+	vec2 p = pos + off*deltaxy;
+	vec2 t = pull-p;
+	float l2 = dot(t, t);
 
-	p -= pull * .0005;
+	t = normalize(t) / l2;
 
-	vec2 pf = fract(p*16.0);
-	pf -= .5;
-	pf = abs(pf);
+	p -= t * .0005;
 
-	float c = pow(1.0-min(pf.x,pf.y), 8.0);
+	p *=16.0;
 
-	gl_FragColor = vec4(c*vec3(1.0, 0.6, 0.2), 1.0);
+	vec2 q = vec2(fract(p.x), mod(p.y, 1.7320508)); // sqrt(3)
+	q = abs(q - vec2(.5,.8660254)); // sqrt(3)/2
+
+	if(dohex)
+	{
+		if(q.y>=.4330127) // sqrt(3)/4
+			q = vec2(.5, .8660254) - q;
+		const float k = .28867513; // sqrt(3)/6
+		const float a = -3.1415927/3.0; // -60 degrees
+		float m1 = abs(dot(q - vec2(0., k), vec2(cos(a), sin(a))));
+		if(q.y<k) m1 = min(m1, q.x);
+		m = m1;
+	} else
+	{
+		vec2 pf = fract(p);
+		pf = abs(pf-.5);
+		float m2 = min(pf.x, pf.y);
+		m = m2;
+	}
 
 }
 
+void main( void ) {
+	pos = surfacePosition;
+	pull = (mouse - .5) * surfaceSize;
+	deltaxy = surfaceSize/resolution;
+
+	vec2 pp = gl_FragCoord.xy/resolution;
+
+	const float corner = .02;
+	const float corner2 = corner / 2.0;
+
+	if(pp.y<corner && (pp.x<corner || pp.x>1.0-corner))
+	{
+		float c = 0.0;
+		if(mouse.x<corner) c = 0.0;
+		else if(mouse.x>1.0-corner) c = 1.0;
+		else c = texture2D(bb, vec2(corner2)).r;
+			if(pp.x > 1.0-corner)
+				c = 1.0 - c;
+		gl_FragColor = vec4(c);
+		return;
+	}
+
+	bool dohex = texture2D(bb, vec2(corner2)).r < .5;
+
+	getval(vec2(0., 0.), dohex);
+
+	m = pow(1.0 - m, 16.0);
+
+	gl_FragColor = vec4(m*vec3(1.0, 0.6, 0.2), 1.0);
+
+}
