@@ -592,8 +592,8 @@ int turbo = 1;
 
 		newshader(0);
 		t = turbo;
-		while(t-- > 0)
-			draw(gtime()*.001, (t==0));
+		for(t=0;t<turbo;++t)
+			draw((gtime()+INTERVAL_MSEC*t/turbo)*.001, (t==turbo-1));
 
 		++nframes;
 
@@ -634,6 +634,7 @@ int turbo = 1;
 				{
 					turbo = code-'0';
 					if(turbo==0) turbo+=10;
+					turbo = 1+(turbo-1)*2;
 				}
 				if(code==SDLK_RIGHT) newshader(1);
 				if(code==SDLK_LEFT) newshader(-1);
