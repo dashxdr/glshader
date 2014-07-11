@@ -36,7 +36,7 @@ void main( void ) {
 		sum += texture2D(bb, position+vec2(cos(a)*r, sin(a)*r)).r;
 		r = rand(n+.2)*R2;
 		a = rand(n+.3)*3.1415927*2.0;
-		sum -= texture2D(bb, position+vec2(cos(a)*r, sin(a)*r));
+		sum -= texture2D(bb, position+vec2(cos(a)*r, sin(a)*r)).r;
 		n += .012739;
 	}
 	gl_FragColor = vec4(vec3(texture2D(bb, position).r+sum*.02), 1.0);
