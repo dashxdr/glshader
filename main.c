@@ -570,6 +570,7 @@ int nframes=0;
 SDL_Event event;
 int code,mod;
 int savecount = 0;
+int turbo = 1;
 	SDL_AddTimer(INTERVAL_MSEC, mytimer, 0);
 
 	inittime();
@@ -590,7 +591,7 @@ int savecount = 0;
 		}
 
 		newshader(0);
-		t = 1;
+		t = turbo;
 		while(t-- > 0)
 			draw(gtime()*.001, (t==0));
 
@@ -629,6 +630,11 @@ int savecount = 0;
 				if(code==SDLK_ESCAPE)
 					exitflag=1;
 				if(code=='g') saveppm(savecount++);
+				if(code>='0' && code<='9')
+				{
+					turbo = code-'0';
+					if(turbo==0) turbo+=10;
+				}
 				if(code==SDLK_RIGHT) newshader(1);
 				if(code==SDLK_LEFT) newshader(-1);
 				if(code=='t')
