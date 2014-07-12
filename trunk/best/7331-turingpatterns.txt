@@ -41,7 +41,7 @@ void main( void ) {
 #define R2 .03
 		float r = rand(n)*R1;
 		float a = rand(n+.1)*3.1415927*2.0;
-		sum += texture2D(bb, position+fix*vec2(cos(a)*r, sin(a)*r)).r;
+		sum += mouse.y*texture2D(bb, position+fix*vec2(cos(a)*r, sin(a)*r)).r;
 		r = rand(n+.2)*R2;
 		a = rand(n+.3)*3.1415927*2.0;
 		sum -= texture2D(bb, position+fix*vec2(cos(a)*r, sin(a)*r)).r;
