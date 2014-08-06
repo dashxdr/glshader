@@ -843,6 +843,14 @@ int main( int argc, char *argv[] )
 
 	resize(sizex, sizey);
 
+	int t = 0;
+	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &t);
+	printf("MAX_TEXTURE_IMAGE_UNITS=%d\n", t);
+	t=1111;
+//	glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &t);
+	glGetIntegerv(0x88ff, &t);
+	printf("MAX_ARRAY_TEXTURE_LAYERS=%d\n", t);
+
 	if(0)
 	{
 		char *p = strdup((const char *)glGetString(GL_EXTENSIONS));
@@ -1039,7 +1047,7 @@ static void draw(float time_seconds, int show)
 #ifdef USE_FB
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
 	initview(sizex, sizey);
-	glBindTexture(GL_TEXTURE_2D, targets[0].texture);
+	glBindTexture(GL_TEXTURE_2D, front->texture);
 	glDisable(GL_LIGHTING);
 	glEnable(GL_TEXTURE_2D);
 	glBegin(GL_QUADS);
