@@ -976,11 +976,6 @@ static void draw(float time_seconds, int show)
 			(float)(height-1-mousey)/height);
 	glUniform2f(SizeHandle, 1.0, 1.0);
 
-	glEnableVertexAttribArray(attribute_coord3d);
-	glEnableVertexAttribArray(attribute_spos);
-	glBindBuffer(GL_ARRAY_BUFFER, vertex_values);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
-
 	GLfloat *p = vertex_data;
 	float z = 0.0;
 	float dx, dy;
@@ -1024,6 +1019,10 @@ static void draw(float time_seconds, int show)
 	p[18] = x;
 	p[19] = y+dy;
 
+	glEnableVertexAttribArray(attribute_coord3d);
+	glEnableVertexAttribArray(attribute_spos);
+	glBindBuffer(GL_ARRAY_BUFFER, vertex_values);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_data), vertex_data, GL_STATIC_DRAW);
 	glVertexAttribPointer(attribute_coord3d, 3, GL_FLOAT, GL_FALSE,
 				5*sizeof(GLfloat), 0);
 	glVertexAttribPointer(attribute_spos, 2, GL_FLOAT, GL_FALSE,
