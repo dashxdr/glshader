@@ -1,0 +1,27 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 resolution;
+
+vec2 rota(vec2 p,float theta){
+	vec2 q;
+	q.x =cos(theta)*p.x - sin(theta)*p.y;
+	q.y =sin(theta)*p.y + cos(theta)*p.x;
+	return q;
+}
+void main( void ) {
+
+	vec2 p = ( gl_FragCoord.xy / resolution.xy ) - 0.5;
+	
+	
+	for(float i=0.;i<4.;i++){
+		p = rota(p,time + length(p*.1) * (20.*cos(time*.5)));
+		float s = 2.;
+		float dy = 1. / ( 100. * abs(p.y*s) );
+		gl_FragColor += vec4( dy * 0.1 * dy, 0.5 * dy, dy, 1.0 ) ;
+	}
+	
+	
+}
