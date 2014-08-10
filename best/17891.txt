@@ -78,11 +78,12 @@ void main(void) {
 			// following approach seems slightly faster than atan one
 			// rotation matrix -36 degrees
 			mat2 r = mat2(.80901699,-.58778525,.58778525,.80901699);
-			mat2 r2 = r*r;
+			// rotation matrix -72 degrees
+			mat2 r2 = mat2(.30901699,-.95105652,.95105652,.30901699);
 			t.x = abs(t.x);
-			t*=r2;
+			t*=r;t*=r;
 			t.x = abs(t.x);
-			t*=r2;
+			t*=r;t*=r;
 			t.x = abs(t.x);
 			t*=r;
 			t.x = abs(t.x);
