@@ -19,7 +19,7 @@ int main(int argc, char **argv)
 	int i;
 	for(i=start;i<=end;++i)
 	{
-		snprintf(temp, sizeof(temp), "wget -q -O - http://glsl.heroku.com/item/%d", i);
+		snprintf(temp, sizeof(temp), "wget -q -O - http://glslsandbox.com/item/%d", i);
 		FILE *f = popen(temp, "r");
 		if(!f)
 		{
