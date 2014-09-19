@@ -54,8 +54,8 @@ vec3    hsv(in float h, in float s, in float v);
 
 float   hash(float u);
 vec4    hash(vec4 v);
-float   smooth(float u);
-vec2    smooth(vec2 uv);
+float   smoothx(float u);
+vec2    smoothx(vec2 uv);
 float   blend(in vec4 l, in vec4 v);
 void    lattice(in vec2 uv, out vec4 l, out vec4 v);
 float   noise(in vec2 uv);
@@ -354,12 +354,12 @@ vec4 hash(vec4 v)
     return fract(vec4(hash(v.x), hash(v.y), hash(v.z), hash(v.w))*-1234.5678);
 }
 
-float smooth(float u)
+float smoothx(float u)
 {
     return u*u*(3.-2.*u);
 }
 
-vec2 smooth(vec2 uv)
+vec2 smoothx(vec2 uv)
 {
     return uv*uv*(3.-2.*uv);
 }
@@ -376,7 +376,7 @@ void lattice(in vec2 uv, out vec4 l, out vec4 v)
     const float k = 257.;
     l.xy = floor(uv);
     l.zw = fract(uv);
-    l.zw = smooth(l.zw);
+    l.zw = smoothx(l.zw);
     float u = l.x + l.y * k;
     v = vec4(u, u+1.,u+k, u+k+1.);
 }
