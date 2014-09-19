@@ -25,7 +25,8 @@ uniform vec2 resolution;
 void main( void ) {
 
 #define RADIUS .2
-	float h = .2 * ( 1.0*resolution.x/resolution.y - pow(2.0 * fract(time*.4) - 1.0, 2.0));
+	float t = 2.0 * fract(time*.4) - 1.0;
+	float h = .2 * ( 1.0*resolution.x/resolution.y - t*t);
 	float xpos = fract(time*.11);
 	if(xpos > .5) xpos = 1.0 - xpos;
 	
