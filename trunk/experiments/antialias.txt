@@ -108,7 +108,7 @@ void main( void ) {
 		return;
 	}
 
-	float grid = .075;
+	float grid = surfaceSize.x*.05;;
 	vec2 insquare = mod(at, grid);
 	float m = min(insquare.x, insquare.y) / grid;
 
