@@ -1,0 +1,151 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+// antialias visualization by dashxdr 20141110
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+varying vec2 surfacePosition;
+uniform vec2 surfaceSize;
+
+vec2 at;
+float dist;
+
+void edge(vec2 a, vec2 b)
+{
+	const float scale = 100.0;
+	vec2 atfix = at - a;
+	float l = scale*length(atfix);
+	dist = min(dist, l);
+	b -= a;
+	vec2 dir = normalize(b);
+	float d = dot(atfix, dir);
+	if(d<0.0 || d>length(b)) return;
+	vec2 cross = vec2(dir.y, -dir.x);
+	d = scale * dot(atfix, cross);
+	dist = min(dist, abs(d));
+}
+
+void inside(vec2 a, vec2 b)
+{
+	vec2 atfix = at - a;
+	b -= a;
+	float c = dot(atfix, vec2(b.y, -b.x));
+	if(c>0.0) dist = .1;
+}
+
+#define MAXCOUNT 20
+vec2 work1[MAXCOUNT], work2[MAXCOUNT];
+
+
+int clip(vec2 v1, vec2 v2, inout vec2 iv[MAXCOUNT], int inum, inout vec2 ov[MAXCOUNT])
+{
+	vec2 base, perp;
+	base = v1;
+	v2 -= v1;
+	perp = vec2(v2.y, -v2.x);
+	int oc = 0;
+	for(int a=0;a<MAXCOUNT;++a)
+	{
+		if(a>=inum) break;
+		int b = a+1;
+		if(b==inum) b = 0;
+		float sidea = dot(iv[a]-base, perp);
+		float sideb = dot(iv[b]-base, perp);
+		if(sidea>=0.0 && sideb>=0.0) continue;
+		if(sidea<0.0)
+			ov[oc++] = iv[a];
+		if(sidea>=0.0 || sideb>=0.0)
+		{
+			float fa;
+			if(sidea<0.0) // a inside, b outside
+				fa = 1.0 - (-sidea / (sideb-sidea));
+			else // b inside, a outside
+				fa = -sideb / (sidea-sideb);
+			ov[oc++] = fa*iv[a] + (1.0 - fa)*iv[b];
+		}
+	}
+	return oc;
+}
+
+float trap(vec2 a, vec2 b)
+{
+	return .5 * (b.x + a.x) * (b.y - a.y);
+}
+
+void closer(inout float tt, vec2 p)
+{
+	float d = length(at - p);
+	tt = min(tt, d);
+}
+
+void main( void ) {
+	at = (2.0*gl_FragCoord.xy - resolution) / resolution.yy;
+
+//	pos = surfacePosition;
+//	pull = (mouse - .5) * surfaceSize;
+
+	float angle = time*.1;
+	const float da = 3.1415926*2.0 / 3.0;
+	float radius = 1.0;
+	vec2 p1 = radius*vec2(cos(angle), sin(angle));
+	angle += da;
+	vec2 p2 = radius*vec2(cos(angle), sin(angle));
+	angle += da;
+	vec2 p3 = radius*vec2(cos(angle), sin(angle));
+//p1 = -.1;p2 = 2.0*(mouse-.5)*resolution/resolution.yy;
+	dist = 20.0;
+	edge(p1, p2);
+	edge(p2, p3);
+	edge(p3, p1);
+
+	if(dist < 1.0)
+	{
+		float y = 1.0 - dist;
+		gl_FragColor = vec4(y, y, 0.0, 1.0);
+		return;
+	}
+
+	float grid = .075;
+	vec2 insquare = mod(at, grid);
+	float m = min(insquare.x, insquare.y) / grid;
+
+	if(m<.1)
+	{
+		gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+		return;
+	}
+	if(0)
+	{
+		at = at - insquare + grid*.5;
+		dist = 1.0;
+		inside(p1, p2);
+		inside(p2, p3);
+		inside(p3, p1);
+		gl_FragColor = vec4(dist, dist, dist, 1.0);
+		return;
+	}
+	work1[0] = at - insquare;
+	work1[1] = work1[0] + vec2(grid, 0.0);
+	work1[2] = work1[0] + vec2(grid);
+	work1[3] = work1[0] + vec2(0.0, grid);
+
+	int n = 4;
+	n = clip(p1, p2, work1, n, work2);
+	n = clip(p2, p3, work2, n, work1);
+	n = clip(p3, p1, work1, n, work2);
+
+	float coverage = 0.0;
+	for(int i=0;i<MAXCOUNT;++i)
+	{
+		if(i>=n) break;
+		int j = i+1;
+		if(j==n) j=0;
+		coverage += trap(work2[i], work2[j]);
+	}
+
+	gl_FragColor = vec4(coverage / (grid*grid));
+}
+
