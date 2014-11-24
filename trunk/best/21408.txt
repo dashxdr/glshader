@@ -1,0 +1,531 @@
+#ifdef GL_ES
+precision highp float;
+#endif
+
+//Isotropic Automata by Chris Birke - Unbound Technologies Inc.
+//
+//Licensed under a Creative Commons Attribution-ShareAlike 4.0 International License.
+//Based on a work at http://glslsandbox.com/e#21210.1
+//Email with questions, improvements, and curiosity - cbirke@gmail.com
+
+//11.16.22 - absorbed conways game
+
+//// CONTROL PARAMETERS
+#define ADD_AUTOMATA
+	#define ADD_INITIAL_ANGLE fract(time * .5)	//initial angle 
+	#define RANDOM_ADD   (mouse.x < .02 || time < 1. ? 99. : 0.)				//add particles randomly over the screen
+	#define POINT_ADD    1.				//add particles at the ADD_POSITION location
+	        #define ADD_POSITION mouse
+	#define TRAIL_ADD .125
+
+#define TRAILS .005									//initial trail intensity (0 for invisible particles)
+	#define TRAIL_DECAY .05			//rate at which trail fades
+
+//#define CHASE_MOUSE .15				//adds a rotation towards the mouse with weighted influence
+	#define CHASE_RANGE .25				//range at which the mouse chase affects automata
+
+
+#define AUTOMATA_COLLISION							//particle to particle reflection (buggy)
+
+#define MAP_COLLISION						
+	#define MAP_THRESHOLD .5			//scale at which the field is considered a barrier to reflect off of
+	#define MAP_RESTITUTION .0025			//if automata pass the threshold, this pushes them back - value controls smoothing of return path
+	#define MAP_DESCENT 0.				//automata are effected by the gradient of the function and turn down it 
+
+#define GRAVITY .81 
+	#define GRAVITY_ANGLE .5 //vector_to_angle(format_to_screen(uv)-format_to_screen(mouse)) 
+
+#define WRAP						//wrap around the screen
+
+//this alias determines the fidelity of the lines
+//sampling is very sensitive to the exact resolution and aspect ratio of the screen
+//it may need ajustment for different screens
+#define ALIAS floor(255.5 * gl_FragCoord.xy+resolution.yy)/resolution.yy
+//// END CONTROL PARAMETERS
+
+
+
+//// HEADER
+#define TAU    (8.*atan(1.))
+#define PI     (4.*atan(1.))
+
+uniform vec2      mouse;
+uniform float     time;
+uniform vec2      resolution;
+uniform sampler2D renderbuffer;
+
+vec2	wrap_and_offset_uv( vec2 uv, vec2 offset);                  //wrapped uv neighbors
+float	vector_to_angle(vec2 v);                                    //2d vector to 1d angle
+vec2	angle_to_vector(float a);                                   //1d angle to 2d vector
+float	mix_angle( float angle, float target, float rate );         //wrapped angle mix (handles crossing 0.->1.)
+float	clamp_angle( float angle );                                 //clamps to min and max > 0 8 bit angle values
+float	reflect_angle( float particle, float normal );              //angle reflection
+float	add_at_position( float probability, float angle, vec2 position );
+float	add_at_random( float probability, float angle);
+float	angle_to_mouse();
+
+//cheap hashes
+float	hash( float v );
+float	hash( vec2 v );
+float	position_hash( vec2 uv );
+float	time_position_hash( vec2 uv );
+
+//screen formatting
+vec2	format_to_screen( vec2 uv );
+float	mask_screen_edges( float width );
+
+//map functions
+float	map( vec2 position );
+vec2	derive( vec2 position, float offset );
+vec2 	derive_prior( vec2 uv, float offset );
+
+//rotation
+float 	cross(float x);
+mat2	rmat( float t );
+
+//environment functions
+float	value_noise( vec2 uv );
+float	fbm( float a, float f, vec2 uv, const int it );	
+float 	maze( vec2 p );
+float 	random_tiles(vec2 p);
+float 	box(vec2 p, vec2 s);
+//// END HEADER
+
+
+
+
+//// MAIN
+//the method requires no input but the coordinates and one channel of the back buffer 
+//everything else here is just one example of their use
+void main() 
+{   
+	vec2 uv		= gl_FragCoord.xy / resolution.xy;  
+
+    	//sample moore neighbors
+    	vec2 neighbor_uv[8]; 
+    	neighbor_uv[0] = wrap_and_offset_uv( uv, vec2(  0., -1. ) );
+    	neighbor_uv[1] = wrap_and_offset_uv( uv, vec2( -1., -1. ) );
+    	neighbor_uv[2] = wrap_and_offset_uv( uv, vec2( -1.,  0. ) );
+	neighbor_uv[3] = wrap_and_offset_uv( uv, vec2( -1.,  1. ) );
+	neighbor_uv[4] = wrap_and_offset_uv( uv, vec2(  0.,  1. ) );
+	neighbor_uv[5] = wrap_and_offset_uv( uv, vec2(  1.,  1. ) );
+	neighbor_uv[6] = wrap_and_offset_uv( uv, vec2(  1.,  0. ) );
+	neighbor_uv[7] = wrap_and_offset_uv( uv, vec2(  1., -1. ) );
+	
+	//check neighbors to see if any are entering this current pixel cell
+	vec4 cell             = vec4( 0. );
+	vec4 prior_cell	      = texture2D( renderbuffer, uv );
+	vec4 neighbor_cell    = vec4( 0. );
+	bool alive            = false;
+	
+	for ( int i = 0; i < 8; i++ )
+    	{
+		neighbor_cell	= texture2D( renderbuffer, neighbor_uv[i] ); 
+		
+		if ( neighbor_cell.w != 0. )
+		{   
+			float neighbor_angle	= neighbor_cell.w;
+
+			vec2 field              = ALIAS;
+            
+			float pole              = min( neighbor_angle, fract( neighbor_angle + .5 ) );
+            
+        			float spin              = fract( pole < .125 || pole > .375 ? field.y: field.x );
+			spin                    = mod( spin, .125 );
+    
+    	        	float future_angle	= fract( neighbor_angle + spin );  
+            
+        	    		bool approaching        = floor( future_angle * 8. ) == float( i );
+            
+	            	//check for potential collisions, and if so pick a winner at random to reduce anisotropy
+			approaching             = approaching && cell.w > 0. ? spin <= .5 : approaching;
+                            
+			if ( approaching ) 
+			{
+				cell.w	= neighbor_cell.w;
+				cell.y  = neighbor_cell.y;
+                		alive   = true;
+				
+				#ifdef AUTOMATA_COLLISION
+					cell.x = cell.w;
+				#endif
+			}
+			
+			#ifdef AUTOMATA_COLLISION
+				cell.x = clamp_angle(mod(4.-float(i),8.)*.125);		
+			#endif
+      	  	}
+	}
+	
+	
+   	
+	#ifdef TRAILS
+		cell.y  += alive ? prior_cell.y + TRAILS : cell.y + prior_cell.y - TRAIL_DECAY;
+	#endif
+    
+	
+	#ifdef ADD_AUTOMATA
+		if( !alive )
+	        {
+			#ifdef POINT_ADD
+				cell.w += add_at_position( POINT_ADD, ADD_INITIAL_ANGLE , ADD_POSITION);
+			#endif
+
+			#ifdef RANDOM_ADD
+                		cell.w += add_at_random( RANDOM_ADD,  ADD_INITIAL_ANGLE );
+			#endif
+			
+			#ifdef TRAIL_ADD
+				cell.w += prior_cell.y == 1. && prior_cell.z < MAP_THRESHOLD ? add_at_position(TRAIL_ADD,  prior_cell.w, uv ) : cell.w;
+			#endif
+		}
+    	#endif
+   
+	
+	#ifdef CHASE_MOUSE
+        	float range = distance( format_to_screen( uv ), format_to_screen( mouse ));
+		if( range < CHASE_RANGE && alive )
+		{
+			cell.w = mix_angle( cell.w, mix_angle( cell.w, angle_to_mouse(), CHASE_MOUSE ), CHASE_MOUSE );
+		}
+    	#endif
+    
+	
+	#ifdef AUTOMATA_COLLISION
+        		if( alive )
+		{
+			vec2 projected_uv	= uv + angle_to_vector( cell.w ) * 1.5 / resolution;
+			vec4 forward_cell	= texture2D( renderbuffer, projected_uv );  
+			
+			if(forward_cell.x != 0.)
+			{
+				cell.w					= reflect_angle( cell.w, forward_cell.x );  
+			}
+			
+		}
+	#endif 
+ 
+	
+	#ifdef MAP_COLLISION
+		vec2 position           = ( uv );
+		float collision         = map( position );
+    
+		if(alive)
+		{
+			vec2 projected_position			= angle_to_vector( cell.w ) * 2. / resolution;
+			float projected_collision	= map( position + projected_position );
+        
+			float normal         		= vector_to_angle( derive( projected_position, .05 ) );
+			float reflection_angle      	= reflect_angle( cell.w, normal );
+			float escape_angle          	= clamp_angle(vector_to_angle( -derive( position, MAP_RESTITUTION ) ) );
+                 
+			cell.w = projected_collision > MAP_THRESHOLD ? reflection_angle : cell.w;        
+			cell.w = collision           > MAP_THRESHOLD ? escape_angle     : cell.w;         
+            
+			cell.w = mix_angle( cell.w, normal, MAP_DESCENT );
+		}
+    
+		//visualize map in blue
+		cell.z += step( MAP_THRESHOLD, collision ) * collision * .5 + collision * .5;
+	#endif 
+
+
+	#ifdef GRAVITY
+		cell.w = alive && cell.z < MAP_THRESHOLD ? mix_angle(cell.w, mix_angle(cell.w, GRAVITY_ANGLE, .5-abs(cell.w)*.25), GRAVITY) : cell.w;
+	#endif
+	
+	
+	
+    	#ifndef WRAP
+        	cell.w *= mask_screen_edges( 1. );
+    	#endif
+
+	
+	//reset on mouse in corner
+	cell *= float( mouse.x + mouse.y > .02 );
+        
+	gl_FragColor = cell;
+}//sphinx - Thank you, glsl sandbox.
+//// END MAIN
+
+
+
+//// MAP FUNCTIONS
+//function map (a heightfield)
+float  map( vec2 position )
+{
+	
+	vec4 rb = texture2D(renderbuffer, position);
+	vec2 p  = format_to_screen(position);
+	float n = fbm(.5, 4., p, 5);
+	float m = maze(p * .125 + 32.9515);
+	
+	return max( 0., position.x > .75 ? m : n);
+}
+
+
+//partial derivitive of map function (the surface normal)
+vec2 derive( vec2 position, float offset )
+{
+	vec2 epsilon = vec2(offset, 0.);
+	vec2 normal  = vec2(0.);
+	normal.x     = map( position + epsilon.xy ) - map( position - epsilon.xy );
+	normal.y     = map( position + epsilon.yx ) - map( position - epsilon.yx );
+	return normalize( normal );
+}
+
+
+//same as above, but from the backbuffer - use this to avoid having to recalculate a field function
+vec2 derive_prior( vec2 uv, float offset )
+{
+	vec3 epsilon = vec3( offset + 1.5, offset + 1.5, 0.) * vec3( 1. / resolution, 1.);
+	vec2 normal  = vec2( 0. );
+	normal.x     = texture2D( renderbuffer, uv + epsilon.xz ).x - texture2D( renderbuffer, uv - epsilon.xz ).x;
+	normal.y     = texture2D( renderbuffer, uv + epsilon.zy ).x - texture2D( renderbuffer, uv - epsilon.zy ).x;
+	return normalize( normal );
+}
+
+
+//value noise
+float value_noise( vec2 uv ) 
+{
+	const float k = 257.;
+	vec4 l  = vec4( floor( uv ), fract( uv ) );
+	float u = l.x + l.y * k;
+	vec4 v  = vec4( u, u + 1.,u + k, u + k +1. );
+	v       = fract( fract( v * 1.23456789 ) * 9.18273645 * v );
+	l.zw    = l.zw * l.zw * ( 3. -2. * l.zw );
+	l.x     = mix( v.x, v.y, l.z);
+    	l.y     = mix( v.z, v.w, l.z);
+    	return    mix( l.x, l.y, l.w);
+}
+
+
+//fractal brownian motion
+float fbm( float a, float f, vec2 uv, const int it )
+{
+	float n = 0.;
+	uv = ( 32.5 + uv ) * rmat(.61);
+	vec2 p = vec2( .3, .7 );
+	for(int i = 0; i < 32; i++)
+	{
+        	if( i < it )
+		{
+            		n += value_noise( uv * f + p ) * a;
+			a *= .5;
+			f *= 2.;
+        	}
+        	else
+        	{
+         	   	break;
+        	}
+    	}
+    	return n;
+}
+
+
+//returns a normalized vector from the current screen pixel to the mouse position
+float angle_to_mouse()
+{
+	vec2 position   = format_to_screen( gl_FragCoord.xy / resolution.xy );
+	vec2 mouse_pos  = format_to_screen( mouse );
+	vec2 v          = mouse_pos - position;
+	return vector_to_angle( v );
+}
+	
+float maze( vec2 p ) 
+{
+
+	float s 	= 24.;
+	float w		= .045;
+	
+	float c0	= box(p + vec2( 2.,1.), vec2(.74125,.35));
+	float c1	= box(p + vec2(-2.,1.), vec2(.74175,.35));
+	
+	vec2 tp 	= 5. + p * rmat(PI*.25);
+	tp.y		-= .4925;
+	
+	float t0 	= random_tiles(tp * s * .5 - 4.);
+	float t1 	= random_tiles(tp * s * .5 + 4.);
+	float t2 	= random_tiles(tp * s * 2. + 3.);
+	
+	float t 	= t2;
+	
+	
+		
+	float b 	= box(p, vec2(1.455,.65));
+	
+	float e0 	= box(p + vec2(1.5+w,-w*2.), vec2(       w, .75-w));
+	float e1 	= box(p - vec2(1.5+w, w*2.), vec2(       w, .75-w));
+	float e2 	= box(p + vec2(   0.,  .75), vec2(1.435-w*2.,     w));
+	float e3 	= box(p - vec2(   0.,  .75), vec2(1.5+w*2.,     w));
+	float e 	= min(min(e0,e1), min(e2,e3));
+	float et	= cross(.5-(e*.5)*32.);
+
+	float tm	= abs(t* (1.-clamp(box(p, vec2(1.5-w,.75-w*1.5))*32.,0.,1.)));
+	
+	float bound 	= step(b, 0.);
+	float edge 	= step(e, 0.);
+	float maze	= step(tm, .15);
+
+	return t;
+}
+
+float random_tiles(vec2 p) 
+{
+	vec2 lattice	= floor(p);
+	float theta 	= hash(lattice) > 0.5 ? 0.0 : PI * 0.5;	
+	p 		*= rmat(theta);
+	vec2 f		= fract(p);
+	return cross(f.x-f.y);
+}
+
+float box(vec2 p, vec2 s)
+{
+	vec2 d = abs(p) - s;
+  	return min(max(d.x, d.y), 0.0) + length(max(d, vec2(0.)));
+}
+///// END MAP FUNCTIONS
+
+
+
+
+//// ANGLES
+//maps a normalized 2d vector to a 0-1 float on a radial gradient
+float vector_to_angle( vec2 v )
+{
+	return fract( atan( v.x, v.y ) / TAU ) ;
+}
+
+
+vec2 angle_to_vector( float a )
+{
+	vec2 v = vec2( a, a ) * TAU;
+	return normalize( vec2( cos( v.x ), sin( v.y ) ) ).yx;
+}
+
+
+//mix two angles without having the problem of flipping back and forth near the 0-1 boundary - can be refactored to something better
+float mix_angle( float angle, float target, float rate )
+{    
+	angle = abs( angle - target - 1. ) < abs( angle + target ) ? angle - 1. : angle;
+	angle = abs( angle - target + 1. ) < abs( angle - target ) ? angle + 1. : angle;
+	return clamp_angle( fract( mix( angle, target, rate ) ) );
+}
+
+
+//reflect an angle off a surface normal
+float reflect_angle( float incident, float normal )
+{
+	return fract( abs( normal ) * 2. - incident - .5 );
+}
+//// END ANGLES
+
+
+
+
+//// CELL SPAWNING
+//spawn a cell from center with a random vector
+float add_at_position( float probability, float angle, vec2 position )
+{
+	bool spawn   = floor( gl_FragCoord.x ) == floor( resolution.x * position.x ) && floor( gl_FragCoord.y ) == floor( resolution.y * position.y );
+	vec2 uv      = gl_FragCoord.xy / resolution.xy;
+	spawn        = spawn && position_hash( uv * rmat( time ) ) < probability;
+	return spawn ? angle : 0.;
+}
+
+
+//spawn a particle from a random position with a random vector 
+float add_at_random( float probability, float angle )
+{
+	vec2 uv      = gl_FragCoord.xy / resolution.xy;
+	bool spawn   = time_position_hash( uv ) + time_position_hash( uv - 1. ) < probability * .01;
+	return spawn ? angle : 0.;
+}
+//// END CELL SPAWNING
+
+
+
+
+//// FORMATTING
+//centers coordinates and corrects aspect ratio for the screen
+vec2 format_to_screen( vec2 p )
+{
+	p       = p * 2. - 1.;
+	p.x     *= resolution.x / resolution.y;
+	return p;
+}
+
+
+//clamps to +-1./256. for the 8 bit buffer
+float clamp_angle( float angle )
+{
+	return clamp( angle, .00390625, 1. );    
+}
+
+
+//takes a positonal offset and creates the neighbor uv position wrapped around the space
+vec2 wrap_and_offset_uv( vec2 uv, vec2 offset )
+{
+	//offset *= mouse.x < .02 ? -1. : 1.; //reverse on mouse at left side of screen - email me if you "fix" the reversal   
+	uv = fract( ( gl_FragCoord.xy + offset ) / resolution );
+	return uv;
+}
+
+
+//this masks out screen edges to prevent wrapping (in case you don't want that)
+float mask_screen_edges( float width )
+{
+	return  gl_FragCoord.x < width || gl_FragCoord.x > resolution.x - width || gl_FragCoord.y < width || gl_FragCoord.y > resolution.y - width ? 0. : 1.;    
+}
+////END SCREEN FORMATTING
+
+
+
+
+//// HASHES
+//cheap hashes used for non deterministic stuff (spawning,etc)
+
+//returns a psudo-random 0-.9999999 number
+float hash( float x )
+{
+	const float modulus = 1234.56789;
+	x = x * modulus;
+	return fract( fract( x ) + x );
+}
+
+float hash(vec2 p) 
+{
+	return fract(sin(p.x * 15.35 + p.y * 35.79) * 43758.23);
+}
+
+//returns a hash from uv coordinates
+float position_hash( vec2 uv )
+{
+	return hash( uv.x + hash( uv.y + hash( -uv.y + hash( uv.x ) ) ) );
+}
+
+
+//returns a hash of position and time inputs
+float time_position_hash( vec2 uv )
+{
+	return position_hash( uv * rmat( time ) );
+}
+//// END HASHES
+
+
+
+//// ROTATIONS
+float cross(float x) 
+{
+	return abs(fract(x)-.5)*2.;	
+}
+
+//2d rotation matrix
+mat2 rmat( float theta )
+{
+	float c = cos( theta );
+	float s = sin( theta );
+	return mat2( c, s, -s, c);
+}
+//// END ROTATIONS
