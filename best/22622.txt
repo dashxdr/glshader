@@ -1,0 +1,64 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+// by RAZIK anass
+// i found noise and hash fonctions in a stack overflow answer
+// and i tried to modify it to get this pixel effect
+// but the fractional brownian motion function was written by me
+// enjoy my pixel world radar :D ^^
+
+uniform float time;// important for animations
+uniform vec2 mouse;
+uniform vec2 resolution;
+
+// [[cos(theta),-sin(theta)]
+//  [sin(theta),sin(theta)]]
+// a rotation matrix mixed with the time value
+// to get rotation during the animation time
+mat2 rotation_mat = mat2(cos(time/5.0),-sin(time/5.0),sin(time/5.0),cos(time/5.0));
+
+float hash(vec2 n){
+	float dot_prod = n.x*127.1 + n.y*311.7;
+	return fract(sin(dot_prod)*43758.9876);
+}
+
+float noise(vec2 intervale){
+	vec2 i = floor(intervale);
+	vec2 f = fract(intervale);
+	vec2 u = f*f*(1.0-2.0*f);
+	
+	return mix(mix(hash(i+vec2(0.0,0.0)),
+		       hash(i+vec2(1.0,.0)),u.x),
+		   mix(hash(i+vec2(0.0,1.0)),
+		       hash(i+vec2(1.0,1.0)),u.x),
+		   u.y);
+}
+
+//fractional brownian motion function
+float fbm(vec2 p){
+	float f = 0.0;
+	float octave = 0.5;
+	float sum = 0.0;
+	
+	for(int i=0;i<5;i++){
+		sum += octave;
+		f += octave*noise(p);
+		p *= 2.01;
+		octave /= 2.0;
+	}
+	
+	f /= sum;
+	
+	return f;
+}
+
+void main( void ) {
+	vec2 pos = gl_FragCoord.xy/resolution.xy*2.0-1.0;// pixels positions
+	pos.x *= resolution.x/resolution.y;// decressing the aspect ratio of the resolution
+	
+	float effect = fbm(3.0*pos*rotation_mat);// our fractional brownian motion effect
+	vec3 color = vec3(effect*tan(-3.0*time/3.0+pos.x),effect+cos(time),effect+sin(time));// preparing the color of pixels
+	
+	gl_FragColor = vec4(color,1.0);
+}
