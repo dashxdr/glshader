@@ -1,0 +1,25 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+varying vec2 surfacePosition;
+uniform sampler2D bb;
+
+float bands(float v) {return step(.8, fract(v*10.0 - .1));}
+void main( void ) {
+	vec2 v = gl_FragCoord.xy/min(resolution.x, resolution.y);
+	if(v.x > 1.0 || v.y > 1.0)
+		gl_FragColor = vec4(0.0);
+	else
+	{
+		float t1 = v.x - v.y + v.x*v.y*.5;
+		float t2 = v.x - v.y*.5;
+t2 = 0.15;
+		gl_FragColor = vec4(bands(t1), bands(t2), 0.0, 1.0);
+	}
+
+}
+
