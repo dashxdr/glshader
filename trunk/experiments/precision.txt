@@ -1,0 +1,22 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+varying vec2 surfacePosition;
+uniform sampler2D bb;
+
+void main( void ) {
+	vec2 v = gl_FragCoord.xy/resolution;
+	vec2 m = mouse;
+	vec2 pos = surfacePosition;
+	const float expand = 32.0;
+	if(v.y>0.5)
+		gl_FragColor = vec4(vec3(v.x/expand), 1.0);
+	else
+		gl_FragColor = expand*texture2D(bb, vec2(v.x, 0.75));
+
+}
+
