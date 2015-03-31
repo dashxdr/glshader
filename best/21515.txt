@@ -1,0 +1,256 @@
+// 
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+//uniform vec2 mouse;
+uniform vec2 resolution;
+varying vec2 surfacePosition;
+
+float t = 1.0*time;
+float pi = atan(1.0)*4.0;
+
+#define MAX_ITER 10
+
+mat2 complex(float zr, float zi)
+{
+   return mat2(zr,-zi,zi,zr);
+}
+
+mat2 complexp(float zl, float zp)
+{
+   return complex(zl*cos(zp),zl*sin(zp));
+}
+
+
+float RZ(mat2 z)
+{
+   return z[0][0];
+}
+
+float IZ(mat2 z)
+{
+   return z[0][1];
+}
+
+float LZ(mat2 z)
+{
+   float x = RZ(z);
+   float y = IZ(z);
+   return sqrt(x*x+y*y);
+}
+
+float PZ(mat2 z)
+{
+   float x = RZ(z);
+   float y = IZ(z);
+   return atan(y,x);
+}
+
+mat2 cdiv(mat2 z1, mat2 z2)
+{
+   float x2 = RZ(z2);
+   float y2 = IZ(z2);
+   float l2sq = x2*x2+y2*y2;
+   mat2 inv_z2 = complex(x2/(l2sq),-y2/(l2sq));
+   return z1*inv_z2;
+}
+
+mat2 CZ(mat2 z)
+{
+   return complex(RZ(z),-IZ(z));
+}
+
+mat2 CE = complex(1.0,0.0);
+mat2 CI = complex(0.0,1.0);
+
+float sinh(float x)
+{
+   return 0.5*exp(-x)-0.5*exp(x);
+}
+float cosh(float x)
+{
+   return 0.5*exp(-x)+0.5*exp(x);
+}
+mat2 ccos(mat2 z)
+{
+   float x = RZ(z);
+   float y = IZ(z);
+   return cos(x)*cosh(y)*CE+sin(x)*sinh(y)*CI;
+}
+mat2 csin(mat2 z)
+{
+   float x = RZ(z);
+   float y = IZ(z);
+   return sin(x)*cosh(y)*CE-cos(x)*sinh(y)*CI;
+}
+mat2 ctan(mat2 z)
+{
+	return cdiv(csin(z),ccos(z));
+}
+mat2 cexp(mat2 z)
+{
+   float x = RZ(z);
+   float y = IZ(z);
+   return exp(x)*(cos(y)*CE+sin(y)*CI);
+}
+mat2 cln(mat2 z)
+{
+   float x = RZ(z);
+   float y = IZ(z);
+   return complex(0.5*log(x*x+y*y),atan(y,x));
+}
+mat2 cpow(mat2 z, mat2 w)
+{
+   return cexp(w*cln(z));
+}
+mat2 csqrt(mat2 z)
+{
+   return cpow(z,CE*0.5);
+}
+mat2 csinh(mat2 z)
+{
+   return cexp(-z)*0.5-cexp(z)*0.5;
+}
+mat2 ccosh(mat2 z)
+{
+   return cexp(-z)*0.5+cexp(z)*0.5;
+}
+mat2 ctanh(mat2 z)
+{
+	return cdiv(csinh(z),ccosh(z));
+}
+mat2 catan(mat2 z)
+{
+   return (cln(CE-z*CI)-cln(CE+z*CI))*CI*0.5;
+}
+mat2 cacos(mat2 z)
+{
+	return cln(z+cpow(z*z-CE,CE*0.5))*(-CI);
+}
+mat2 cabs(mat2 z)
+{
+   return complex(abs(RZ(z)),abs(IZ(z)));
+}
+
+mat2 pheta(mat2 z)
+{
+   mat2 w = CI;
+   for (float n=1.0;n<=19.0;n+=1.0)
+   {
+	   w *= CE-cpow(z,CE*n);
+	   //w *= CE-cpow((z),CE*(n))+z*(z-CE);
+   }
+	//return w;
+	//return cdiv(CE,w);
+	//return cln(cpow(ccos(cln((w))-CE*(t)),CE*10.0));
+	return (cpow(((cln(w))),CE*2.0));
+}
+mat2 zeda(mat2 z)
+{
+   mat2 w = CE;
+   for (float n=1.0;n<=19.0;n+=1.0)
+   {
+	   w+=cpow(CE/n,(z));
+   }
+	return (w);
+}
+mat2 ghamma(mat2 z)
+{
+   mat2 w = CE;
+   for (float n=1.0;n<=19.0;n+=1.0)
+   {
+	   w*=(CE+z/n)*cexp(-z/n);
+   }
+	w*=z*cexp(z*0.5772157);
+	return cdiv(CE,w);
+}
+
+mat2 t1(mat2 z)
+{
+   //return cdiv(CE,CE-z)+4.0*(sin(t/16.0)+1.0)*cdiv(CE,CE-z*z);
+   //return cdiv(CE,CE-z)+f1R*cdiv(CE,CE-z*z);
+   //return csin(cdiv(CE,z)-t/100.0*CE);
+   //return csin(csqrt(z)-CE*t);
+   //return csqrt(cdiv(CE,CE+z*z*z));
+   //return cln(csin(z-CE*t/100.0)*cexp(CI*t));
+	//return cexp(catan((csin(z)))*z);
+	//return (csin(cdiv(CE,z*z)-t/100.0*CE));
+	//return cln(cln(z)*(cln(-z+CE*2.0)));
+	//return z*z-CE*sin(t/10.0);
+	//return (cdiv(z*z-CE*10.0*sin(t/1.0),cln(z*z-CE)));
+	return ((csinh(cln(catan(z*0.5)))));
+}
+mat2 fpre(mat2 z)
+{
+	mat2 w = z;
+	//w=zeda(cdiv(CE,w));
+	//w=((pheta(cdiv(CE,w))));
+	//w=((csinh(csin(cln(csin(catan(cabs(csinh(((cln((z*z))))*CI-CI*t/10.0)*CE*1.0))*CI))))));
+	w=((ctan(catan(cln(csin(cln(csinh(w*CI)*cexp(CI*t))*CI))))));
+	return w;
+}
+
+mat2 fpost(mat2 z)
+{
+	mat2 w = z;
+	
+	w=(((w*CI)));
+	
+	w=cpow(w,CI);
+	return (w);
+}
+
+void main(void)
+{
+   float x = gl_FragCoord.x;
+   float y = gl_FragCoord.y;
+   float w = resolution.x;
+   float h = resolution.y;
+
+   float X1 = -4.0;
+   float X2 = 4.0;
+   float Y1 = -4.0;
+   float Y2 = 4.0;
+
+   float X = (((X2-X1)/w)*x+X1)/1.0;
+   float Y = ((((Y2-Y1)/h)*y+Y1)*h/w)/1.0;
+
+   //mat2 z = mat2(sin(X),-cos(Y-X),Y,X);
+   //mat2 z = complex(X,Y);
+	vec2 surfacePosition = surfacePosition * 10.0;
+   mat2 z = complex(surfacePosition.x,surfacePosition.y);
+	
+   //mat2 z = complexp(LZ(z1),PZ(z1)-t);
+   const int N = MAX_ITER;
+   mat2 fn = fpre(z);
+   for (int n=0;n<N;n++)
+   {
+      fn = t1(fn);
+   }
+   mat2 f = fpost(fn);
+   float phase = PZ(f);
+   float c = phase/pi;
+#if 0
+   gl_FragColor = vec4(vec3(abs(c)),1.0);
+#else
+   if (c>=0.0 && c<=0.5)
+   {
+      gl_FragColor = vec4(2.0*c,0.0,0.0,1.0);
+   }
+   if (c>0.5 && c<=1.0)
+   {
+      gl_FragColor = vec4(1.0,c*2.0-1.0,c*2.0-1.0,1.0);
+   }
+   if (c<0.0 && c>=-0.5)
+   {
+      gl_FragColor = vec4(0.0,abs(c)*2.0,0.0,1.0);
+   }
+   if (c<-0.5 && c>-1.0)
+   {
+      gl_FragColor = vec4(abs(c)*2.0-1.0,1.0,abs(c)*2.0-1.0,1.0);
+   }
+#endif   
+}
