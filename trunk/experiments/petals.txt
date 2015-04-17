@@ -4,16 +4,8 @@ precision mediump float;
 
 // dashxdr 20150417
 
-const vec3 COLOR = vec3(1.0, 0.0, 0.0);
-const vec3 COLOR2 = vec3(1.0, 1.0, 1.0);
-const vec3 LIGHTPOS = vec3(-10.5, 10.0, 10.0);
-const float AMBIENT = .3;
-const float TSCALE = 5.0;
-const float RF = 10.0;
-
 varying vec2 surfacePosition;
 uniform float time;
-
 
 void main()
 {
