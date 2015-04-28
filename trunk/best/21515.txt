@@ -1,18 +1,18 @@
-// 
+// teddybear
 
 #ifdef GL_ES
 precision mediump float;
 #endif
 
 uniform float time;
-//uniform vec2 mouse;
+uniform vec2 mouse;
 uniform vec2 resolution;
 varying vec2 surfacePosition;
 
 float t = 1.0*time;
 float pi = atan(1.0)*4.0;
 
-#define MAX_ITER 10
+#define MAX_ITER 40
 
 mat2 complex(float zr, float zi)
 {
@@ -168,36 +168,34 @@ mat2 ghamma(mat2 z)
 	return cdiv(CE,w);
 }
 
+mat2 cfun(mat2 z)
+{
+	mat2 w = z;
+	float n = 1.0*((mouse.x));
+	//float n=-pi;
+	//float n = 20.0*(sin(t/10.0));
+	//w=(cpow(CE*n+w,CE*n))/pow(n,n);
+	//w=(cpow(CE*n+w*CI,CE*n)+cpow(CE*n-w*CI,CE*n))/pow(n,n);
+	//float y=(mouse.y-0.5)*40.0;
+	//w=(cpow(z,CE*(n+1.0))-cpow(CE+z+CE*y/n,CE*(n)));
+	w=cpow(z,CE*n)+cpow(z,CE*(n-1.0))-CE;
+	return w;
+}
+
 mat2 t1(mat2 z)
 {
-   //return cdiv(CE,CE-z)+4.0*(sin(t/16.0)+1.0)*cdiv(CE,CE-z*z);
-   //return cdiv(CE,CE-z)+f1R*cdiv(CE,CE-z*z);
-   //return csin(cdiv(CE,z)-t/100.0*CE);
-   //return csin(csqrt(z)-CE*t);
-   //return csqrt(cdiv(CE,CE+z*z*z));
-   //return cln(csin(z-CE*t/100.0)*cexp(CI*t));
-	//return cexp(catan((csin(z)))*z);
-	//return (csin(cdiv(CE,z*z)-t/100.0*CE));
-	//return cln(cln(z)*(cln(-z+CE*2.0)));
-	//return z*z-CE*sin(t/10.0);
-	//return (cdiv(z*z-CE*10.0*sin(t/1.0),cln(z*z-CE)));
-	return ((csinh(cln(catan(z*0.5)))));
+	return (cln(cpow(catan(z+CE*pi*mouse.x),CE*(-8.0))));	
 }
 mat2 fpre(mat2 z)
 {
 	mat2 w = z;
-	//w=zeda(cdiv(CE,w));
-	//w=((pheta(cdiv(CE,w))));
-	//w=((csinh(csin(cln(csin(catan(cabs(csinh(((cln((z*z))))*CI-CI*t/10.0)*CE*1.0))*CI))))));
-	w=((ctan(catan(cln(csin(cln(csinh(w*CI)*cexp(CI*t))*CI))))));
+	
 	return w;
 }
 
 mat2 fpost(mat2 z)
 {
 	mat2 w = z;
-	
-	w=(((w*CI)));
 	
 	w=cpow(w,CI);
 	return (w);
