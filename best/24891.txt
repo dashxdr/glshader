@@ -1,0 +1,198 @@
+//---------------------------------------------------------
+// Shader:   IllustratedEquations.glsl               4/2015
+//           http://glslsandbox.com/e#24891
+// Original: https://www.shadertoy.com/view/MtBGDW
+//           Created by sofiane benchaa - sben/2015 
+// tags:     procedural, 2d, fractal, trigonometric, curve, complex, iterative
+// info:     http://www.mathcurve.com/surfaces/tore/tn.shtml
+//           http://xrt.wikidot.com/gallery:implicit
+//---------------------------------------------------------
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+
+//---------------------------------------------------------
+#define FIELD 22.0
+#define ITERATION 12
+#define CHANNEL bvec3(true,true,true)
+#define PI4 0.7853981633974483
+#define TONE vec3(0.299,0.587,0.114)
+
+//just a line
+vec2 lineEQ(vec3 p,float t)
+{
+	vec2 fx = vec2(p.z);
+	fx.x *= p.y;
+	fx.x *= fx.x;
+	return fx;
+}
+
+// triangle
+vec2 triangleEQ( vec3 p, float t )
+{
+	return vec2(max(abs(p.x)*PI4+p.y*0.5,-p.y) - 0.2, 0.0);
+}
+
+// regular trifolium
+// http://www.mathcurve.com/surfaces/tore/tn.shtml
+// ((x^2+y^2)^2-x*(x^2-3*y^2))^2+z^2-0.008=0
+vec2 bretzTrifolEQ(vec3 p,float t)
+{	
+	vec2 fx = vec2(0.008+0.006*sin(t));
+	float x2 = p.x*p.x;
+	float y2 = p.y*p.y;
+	fx.x = (x2+y2)*(x2+y2)-p.x*(x2-3.0*y2);
+	fx.x *= fx.x;
+	fx.x += p.z*p.z;
+	fx.x /=	fx.y;
+	return fx;
+}
+
+// Bretzel6
+// ((x^2+y^2/4-1)*(x*x/4+y*y-1))^2-z^2=0.1
+vec2 bretzel6EQ(vec3 p,float t)
+{	
+	vec2 fx = vec2(0.06+0.04*sin(t));
+	float x2 = p.x*p.x;
+	float y2 = p.y*p.y;
+	fx.x = (x2+y2/4.-1.)*(x2/4.+y2-1.);
+	fx.x *= fx.x;
+	fx.x += p.z*p.z;
+	fx.x /=	fx.y;
+	return fx;
+}
+
+// quad torus
+// (x^2*(1-x^2)^2*(4-x^2)^3-20*y^2)^2+80*z^2=22
+vec2 quadTorusEQ(vec3 p,float t)
+{
+	vec2 fx = vec2(22.0+16.*sin(t));
+	float x2 = p.x*p.x;
+	float y2 = p.y*p.y;
+	fx.x = x2*pow(1.0-x2,2.)*pow(4.0-x2,3.0)-20.0*y2;
+	fx.x *= fx.x;
+	fx.x += 1.0*(p.z*p.z);
+	fx.x /=  fx.y;
+	return fx;
+}
+//lemniscat Bernoulli
+// ((x^2+y^2)^2-x^2+y^2)^2+z^2=0.01
+vec2 bretzBernEQ(vec3 p,float t)
+{
+	vec2 fx = vec2(0.01);
+	float x2 = p.x*p.x;
+	float y2 = p.y*p.y;
+	fx.x = ((x2+y2)*(x2+y2)-x2+y2);
+	fx.x *= fx.x;
+	fx.x /= fx.y;
+	return fx;
+}
+//iterative equations
+
+//mandelbrot
+vec2 mandelbrotEQ(vec3 c,float t)
+{
+	vec4 z = vec4(c,0.0);
+	vec3 zi = vec3(0.0);
+	for(int i=0; i<ITERATION; ++i)
+	{
+		zi.x = (z.x*z.x-z.y*z.y);
+		zi.y = 2.*(z.x*z.y);
+		zi.xyz += c;
+		if(dot(z.xy,z.xy)>4.0)break;
+		z.w++;
+		z.xyz=zi;
+	}
+	z.w /= float(ITERATION);
+	return 1.0-z.wx;
+}
+
+// wolf face
+vec2 wolfFaceEQ(vec3 p,float t)
+{
+	vec2 fx = p.xy;
+	p=(abs(p*2.0+sin(t)*0.7));
+	const float j=float(ITERATION);
+	vec2 ab = vec2(2.0-p.x);
+	for(float i=0.0; i<j; i++)
+	{
+		ab+=(p.xy)-cos(length(p));
+		p.y+=sin(ab.x-p.z)*0.5;
+		p.x+=sin(ab.y)*0.5;
+		p-=(p.x+p.y);
+		p+=(fx.y+cos(fx.x));
+		ab += vec2(p.y);
+	}
+	p/=FIELD;
+	fx.x=(p.x+p.x+p.y);
+	return fx;
+}
+
+vec2 dogFaceEQ(vec3 p,float t)
+{
+	vec2 fx = p.xy;
+	p=(abs(p*2.0)+sin(t)*0.2);
+	const float j=float(ITERATION);
+	vec2 ab = vec2(2.0-p.x);
+	for(float i=0.0; i<j; i++)
+	{		
+		ab+=p.xy+cos(length(p));
+		p.y+=sin(ab.x-p.z)*0.5;
+		p.x+=sin(ab.y)*0.5;
+		p-=(p.x+p.y);
+		p-=((fx.y)-cos(fx.x));
+	}
+	p/=FIELD;
+	fx.x=(p.x+p.x+p.y);
+	return fx;
+}
+
+// animated calamari
+vec2 pieuvreEQ(vec3 p,float t)
+{
+	vec2 fx = p.xy;
+	fx.x = (fx.y+length(p*fx.x)-cos(t+fx.y));
+	fx.x = (fx.y+length(p*fx.x)-cos(t+fx.y));
+	fx.x = (fx.y+length(p*fx.x)-0.5*cos(t+fx.y));
+	fx.x *= fx.x*0.1;
+	return fx;
+}
+
+//---------------------------------------------------------
+vec3 computeColor(vec2 fx)
+{
+	vec3 color = vec3(vec3(CHANNEL)*TONE);
+	color -= (fx.x);
+	color.b += color.g*1.5;
+	return clamp(color,(0.0),(1.0));
+}
+//---------------------------------------------------------
+void main() 
+{
+	float ratio = resolution.y / resolution.x;
+	vec2 position = ( gl_FragCoord.xy / resolution.xy )-vec2(0.5, 0.8*ratio);
+	position.y *= ratio;
+	vec3 p = position.xyx*FIELD;
+    
+	p.z = 2.0*FIELD*0.5;
+	vec3 color = computeColor(wolfFaceEQ(p+vec3(5.0, 0.0, 0.0),time));
+	p.z = 0.0;  
+	color += computeColor(dogFaceEQ(p*2.0+vec3(0.0,-3.0, 0.0),time));
+	color += computeColor(mandelbrotEQ(p+vec3(-5.0,-4.0, 0.0),time));
+ 
+	color += computeColor(triangleEQ(p+vec3(-4.0,-1.0, 0.0),time));
+	color += computeColor(lineEQ(p+vec3(0.0, 5.0, 5.0),time));
+
+	color += computeColor(quadTorusEQ(p+vec3(-5.0, 1.0, 0.0),time));
+	color += computeColor(bretzTrifolEQ(p+vec3(-6.0, 3.0, 0.0),time));
+	color += computeColor(bretzBernEQ(p+vec3(-4.0, 3.0, 0.0),time));
+	color += computeColor(bretzel6EQ(p+vec3(-7.4, -2.0, 0.0),time));
+    
+	color += computeColor(pieuvreEQ(p*2.5+vec3(-4.0, 4.0, 0.0),time));
+	gl_FragColor = vec4( color, 1.0 );
+}
