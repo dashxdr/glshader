@@ -40,8 +40,8 @@ float axe = pow(qAxis.x+qAxis.y+qAxis.z+wAxis.x+wAxis.y+wAxis.z+sAxis.x+sAxis.y+
 
 vec3 camPos = (vec3(0.0, 0.0, -1.0));
 vec3 camUp  = (vec3(0.0,1.0,0.0));
-float focus = 1.75;//pi+sin(t)*phi;
-vec3 camTarget = vec3(0.0);
+float focus = pi;//pi+sin(t)*phi;
+vec3 camTarget = vec3(0.5)*sAxis;
 
 vec3 rotate(vec3 vec, vec3 axis, float ang)
 {
@@ -120,7 +120,7 @@ void main( void )
    
     float t = 0.5;
     for(int i = 0 ; i < 150; i++) {
-        float temp = map((camPos + rayDir * (t*pi)),t*hfpi)*.4;
+        float temp = map((camPos + rayDir * (t*pi)),t*hfpi)*.45;
         if(temp < 0.0001) break;
 
         t += temp;
