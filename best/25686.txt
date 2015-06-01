@@ -1,0 +1,33 @@
+// Shader:    Orbiting2.glsl    tHolzer 
+// Experimenting with fractal orbit traps.
+// original:  https://www.shadertoy.com/view/4dj3Wy
+// License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+
+void main( void ) 
+{
+  vec2 p = 1.5 * (-resolution.xy +2.0*gl_FragCoord.xy) / resolution.y;
+  p.x -= 0.7;
+  vec2 z = p;
+  z.x += mouse.x - 0.5;
+  float f = 1.0;
+  float g = 1.0;
+  for( int i=0; i<128; i++ ) 
+  {
+    float w = float(i)+time;
+    vec2 z1 = vec2(2.0*cos(w), 2.0*sin(w));		   
+    z = vec2( z.x * z.x - z.y * z.y, 2.0 * z.x * z.y ) + p;
+    f = min( f, abs(dot(z - p, z - p) -0.004*float(i)));
+    g = min( g, dot( z - z1, z - z1));
+  }
+  f = 1.0 + log(f) / 16.0;
+  g = 1.0 + log(g) / 8.0;
+  gl_FragColor = 1.-abs(vec4(g*g,f*f,f,1.0));
+}	
