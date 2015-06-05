@@ -10,35 +10,27 @@ uniform vec2 mouse;
 uniform sampler2D bb;
 varying vec2 surfacePosition;
 
-
-float best = 0.0;
-float size = .1;
-void check(vec2 pos, float tm)
-{
-	float d = 50.0*abs(length(pos - surfacePosition) - tm);
-	if(d<size)
-		best = max(best, 1.0 - d);
-}
-
 void main( void )
 {
-	float r1 = 0.2;
+	const float r1 = 0.4;
 
-	const int NUM = 40;
+	const int NUM = 80;
 	float numf = float(NUM);
 	float slowtime = time * .25;
 	const float timestep = .01;
+	float best = 0.0;
 	for(int i=0;i<NUM;++i)
 	{
 		float a1 = 2.0*3.1415927*float(i)/float(NUM);
 		vec2 pos = r1*vec2(cos(a1), sin(a1));
-		float tm = max(slowtime - float(i)*timestep,-size);
+		float tm = max(slowtime - float(i)*timestep,-1.0);
 		tm = min(tm, mod(tm, numf*timestep));
-		check(pos, tm);
+		float d = 500.0*abs(length(pos - surfacePosition) - tm);
+		if(d<1.0)
+			best = max(best, 1.0-d);
 	}
 
-	vec4 color = vec4(0.0, 0.0, 0.2, 1.0);
-	if(best>0.0)
-		color.rgb = best*vec3(1.0, .666, 0.0);
-	gl_FragColor = color;
+	vec4 color1 = vec4(0.000, 0.000, 0.200, 1.0);
+	vec4 color2 = vec4(1.000, 0.666, 0.000, 1.0);
+	gl_FragColor = mix(color1, color2, min(best*2.0, 1.0));
 }
