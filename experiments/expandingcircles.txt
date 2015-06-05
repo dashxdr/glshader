@@ -1,0 +1,44 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+//dashxdr 20150605, expanding circles
+
+uniform float time;
+uniform vec2 resolution;
+uniform vec2 mouse;
+uniform sampler2D bb;
+varying vec2 surfacePosition;
+
+
+float best = 0.0;
+float size = .1;
+void check(vec2 pos, float tm)
+{
+	float d = 50.0*abs(length(pos - surfacePosition) - tm);
+	if(d<size)
+		best = max(best, 1.0 - d);
+}
+
+void main( void )
+{
+	float r1 = 0.2;
+
+	const int NUM = 40;
+	float numf = float(NUM);
+	float slowtime = time * .25;
+	const float timestep = .01;
+	for(int i=0;i<NUM;++i)
+	{
+		float a1 = 2.0*3.1415927*float(i)/float(NUM);
+		vec2 pos = r1*vec2(cos(a1), sin(a1));
+		float tm = max(slowtime - float(i)*timestep,-size);
+		tm = min(tm, mod(tm, numf*timestep));
+		check(pos, tm);
+	}
+
+	vec4 color = vec4(0.0, 0.0, 0.2, 1.0);
+	if(best>0.0)
+		color.rgb = best*vec3(1.0, .666, 0.0);
+	gl_FragColor = color;
+}
