@@ -1,0 +1,49 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+uniform sampler2D backbuffer;
+
+//bubble fractal
+//set to 8 so it won't be slow and it looks the same
+
+float rand(vec2 co){
+    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453) * 2.0 - 1.0;
+}
+
+void main( void ) {
+
+	vec2 pos = ( gl_FragCoord.xy / resolution.xy * 2.0) - 1.0;
+	pos.x *= resolution.x / resolution.y;
+	float color = 0.0;
+
+	for (float j = 1.0; j < 10.0; j++) {
+		for(float i = 1.0; i <= 10.0; i++)
+		{
+			vec2 sPos2 = vec2(rand(vec2(j, i)) * sin(time * j * i * 0.01), rand(vec2(i, j)) * cos(time * j * i * 0.01));
+			for(float k = 0.0; k < 10.0; k++)
+			{
+				vec2 sPos = vec2(rand(vec2(i, k)) * sin(time * i * k * 0.1), rand(vec2(k, i)) * cos(time * k * i * 0.1));
+				sPos *= 0.08;
+				sPos += sPos2;
+				//color += max(0.0, ((1.0 / i) - distance(pos, sPos)) * (i))*0.5;
+				float d = distance(pos, sPos);
+				color += 0.0005 / pow(d / 1.0, 1.0+i/16.0);
+				
+			}
+		}
+	}
+	
+	color *= 0.15;
+	color = pow(color, 3.0);
+	
+	vec4 old = texture2D(backbuffer, gl_FragCoord.xy / resolution.xy);
+	
+	vec3 rgb = vec3(0.0, color, pow(color, 2.5));
+	
+	gl_FragColor =  old * 0.9 + vec4( rgb, 1.0 );
+
+}
