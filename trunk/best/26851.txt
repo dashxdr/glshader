@@ -1,0 +1,543 @@
+
+//---------------------------------------------------------
+// Shader:   AmigaJuggler.glsl   2015-07-01 by pellicus
+//           https://www.shadertoy.com/view/4lfXRB
+//           https://www.shadertoy.com/view/llXSWr
+//---------------------------------------------------------
+
+// My AMIGA's 30th anniversary contribution.
+
+// started from iq primitives.
+// switched to a pure raytracing approach
+// added the text title borrowing code from https://www.shadertoy.com/view/Mt2GWD
+//
+// This is my first shadertoy.com production :D
+// so veeery far to be considered a well written and optimized code :D.
+// Heavly inspired from http://meatfighter.com/juggler/ and totally rebuilt on GLSL.
+
+// This is the Amiga Juggler , a raytracing animation by Eric Graham 86/87 ... yes,
+// 28 years ago!. I think this is one of the most inspiring piece
+// of digital art made on Amiga after all :D.
+// I desired to see it in real time since I've seen it
+// on my Amiga, tons of years ago, It was provided as a playback of a precalculated movie.
+
+// I'll try to post a little more about this shader on my new blog next days
+//  www.ereticus.com
+// a site where I , @pellicus, will rant some heresies ;) and ideas about graphic stuff, shaders,
+// raytracing and alternative rendering techs, engine3ds, unity plugins, and stuff like
+// that looking at videogames
+// and multimedia productions perspective.
+
+// Thanks you all for watching. :D
+// Genoa (Italy), 1 july 2015
+// Dario Pelella (@pellicus or dario.pelella on FB)
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+
+// ===============================================================
+// TEXT TITLE ====================================================
+// ===============================================================
+#define DOWN_SCALE 4.0
+#define CHAR_SIZE vec2(8, 12)
+#define CHAR_SPACING vec2(8, 12)
+#define STRWIDTH(c) (c * CHAR_SPACING.x)
+#define STRHEIGHT(c) (c * CHAR_SPACING.y)
+
+//Automatically generated from the 8x12 font sheet here:
+//http://www.massmind.org/techref/datafile/charset/extractor/charset_extractor.htm
+
+vec4 ch_spc = vec4(0x000000,0x000000,0x000000,0x000000);
+vec4 ch_apo = vec4(0x003030,0x306000,0x000000,0x000000);
+vec4 ch_0 = vec4(0x007CC6,0xD6D6D6,0xD6D6C6,0x7C0000);
+vec4 ch_3 = vec4(0x0078CC,0x0C0C38,0x0C0CCC,0x780000);
+vec4 ch_A = vec4(0x003078,0xCCCCCC,0xFCCCCC,0xCC0000);
+vec4 ch_M = vec4(0x00C6EE,0xFEFED6,0xC6C6C6,0xC60000);
+vec4 ch_I = vec4(0x007830,0x303030,0x303030,0x780000);
+vec4 ch_G = vec4(0x003C66,0xC6C0C0,0xCEC666,0x3E0000);
+vec4 ch_h = vec4(0x00E060,0x606C76,0x666666,0xE60000);
+vec4 ch_t = vec4(0x000020,0x60FC60,0x60606C,0x380000);
+vec4 ch_s = vec4(0x000000,0x0078CC,0x6018CC,0x780000);
+
+vec2 res = resolution.xy / DOWN_SCALE;
+vec2 print_pos = vec2(0);
+
+
+//Extracts bit b from the given number.
+//Shifts bits right (num / 2^bit) then ANDs the result with 1 (mod(result,2.0)).
+float extract_bit(float n, float b)
+{
+    b = clamp(b,-1.0,24.0);
+    return floor(mod(floor(n / pow(2.0,floor(b))),2.0));
+}
+
+//Returns the pixel at uv in the given bit-packed sprite.
+float sprite(vec4 spr, vec2 size, vec2 uv)
+{
+    uv = floor(uv);
+    
+    //Calculate the bit to extract (x + y * width) (flipped on x-axis)
+    float bit = (size.x-uv.x-1.0) + uv.y * size.x;
+    
+    //Clipping bound to remove garbage outside the sprite's boundaries.
+    bool bounds = all(greaterThanEqual(uv,vec2(0))) && all(lessThan(uv,size));
+    
+    float pixels = 0.0;
+    pixels += extract_bit(spr.x, bit - 72.0);
+    pixels += extract_bit(spr.y, bit - 48.0);
+    pixels += extract_bit(spr.z, bit - 24.0);
+    pixels += extract_bit(spr.w, bit - 00.0);
+    
+    return bounds ? pixels : 0.0;
+}
+
+//Prints a character and moves the print position forward by 1 character width.
+float oneChar(vec4 ch, vec2 uv)
+{
+    float px = sprite(ch, CHAR_SIZE, uv - print_pos);
+    print_pos.x += CHAR_SPACING.x;
+    return px;
+}
+
+float text(vec2 uv)
+{
+    float col = 0.0;
+    
+    vec2 center = res/2.0;
+    
+    //Amiga's 30th text.
+    
+    print_pos = floor(vec2(STRWIDTH(1.0),STRHEIGHT(1.0))/2.0);
+    
+    col += oneChar(ch_A,uv);
+    col += oneChar(ch_M,uv);
+    col += oneChar(ch_I,uv);
+    col += oneChar(ch_G,uv);
+    col += oneChar(ch_A,uv);
+    col += oneChar(ch_apo,uv);
+    col += oneChar(ch_s,uv);
+    
+    col += oneChar(ch_spc,uv);
+    
+    col += oneChar(ch_3,uv);
+    col += oneChar(ch_0,uv);
+    col += oneChar(ch_t,uv);
+    col += oneChar(ch_h,uv);
+    
+    return col;
+}
+
+void mainText( inout vec4 fragColor, in vec2 fragCoord )
+{
+    vec2 uv = fragCoord.xy / DOWN_SCALE;
+    vec2 duv = floor(fragCoord.xy / DOWN_SCALE);
+    
+    float pixel = text(duv);
+    vec3 col = vec3(1);
+    col *= (1.-distance(mod(uv,vec2(1.0)),vec2(0.65)))*1.2;
+    fragColor.rgb = mix(fragColor.rgb,vec3(0,0,1),pixel);
+}
+
+
+
+//#######################################################################
+//#######################################################################
+//#######################################################################
+
+#define PRECISION_STEP 0.001
+//----------------------------------------------------------------------
+
+// Inspired by http://meatfighter.com/juggler/
+// I used some values and snippets here and there
+
+#define Math_PI 3.1415926
+
+
+// Materials
+#define MAT_FLOOR  vec3(-1.0,1.0,0.0)
+#define MAT_MIRROR vec3(-1.0,2.0,0.0)
+
+#define MAT_LIMBS  vec3(0.929,0.508,0.508)
+
+#define MAT_TORSO  vec3(0.890,0.000,0.000)
+#define MAT_EYES   vec3(0.087,0.019,0.508)
+#define MAT_HAIR   vec3(0.111,0.054,0.071)
+
+//#define MAT_SKY     10.0
+#define MAT_SKY_COLOR_A   vec3(0.74,0.74,1.0)
+#define MAT_SKY_COLOR_B   vec3(0.13,0.137,0.96)
+
+// Scene constants
+
+#define CAMERA_NEAR 0.03
+#define CAMERA_FAR 25.0
+
+// The global scale of the scene is the same found in meatfighter.com,
+// should be better to change it in meters instead of centimeters but
+// I preferred to respect the original author choice.
+
+#define gSCALE  0.01
+
+// Animations and Modeling parameters
+
+#define JUGGLE_X0  -182.0
+#define JUGGLE_X1  -108.0
+#define JUGGLE_Y0  88.0
+#define JUGGLE_H_Y  184.0
+
+#define JUGGLE_H_VX ( (JUGGLE_X0 - JUGGLE_X1) / 60.0)
+#define JUGGLE_L_VX ((JUGGLE_X1 - JUGGLE_X0) / 30.0)
+
+#define  JUGGLE_H_H (JUGGLE_H_Y - JUGGLE_Y0)
+#define  JUGGLE_H_VY (4.0 * JUGGLE_H_H / 60.0)
+#define  JUGGLE_G (JUGGLE_H_VY * JUGGLE_H_VY/ (2.0 * JUGGLE_H_H))
+
+
+#define  JUGGLE_B_VY (2.0 * JUGGLE_H_H / 30.0)
+#define  JUGGLE_B ((JUGGLE_B_VY * JUGGLE_B_VY )/ (JUGGLE_H_H))
+
+#define JUGGLE_L_VY  (0.5 * JUGGLE_G * 60.0)
+
+#define HIPS_MAX_Y 85.0
+#define HIPS_MIN_Y  81.0
+
+#define HIPS_ANGLE_MULTIPLIER  (2.0 * Math_PI / 30.0)
+
+// by reason of culling and skip unnecessary calculations
+float sdCapsule( vec3 pa, vec3 ba, float r )
+{
+    float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
+    return length( pa - ba*h ) - r;
+}
+
+float rAABB( in vec3 roo, in vec3 rdd, in vec3 rad )
+{
+    vec3 m = 1.0/rdd;
+    vec3 n = m*roo;
+    vec3 k = abs(m)*rad;
+    
+    vec3 t1 = -n - k;
+    vec3 t2 = -n + k;
+    
+    float tN = max( max( t1.x, t1.y ), t1.z );
+    float tF = min( min( t2.x, t2.y ), t2.z );
+    if( tN > tF || tF < 0.0) return CAMERA_FAR;
+    
+    return tN;
+}
+// by reason of modeling
+
+float rPlane(vec3 o,vec3 d,vec4 pn)
+{
+    float num = pn.w - dot(pn.xyz,o);
+    float denom = dot(pn.xyz,d);
+    float t = num/denom;
+    if(t>PRECISION_STEP)
+        return t;
+    return CAMERA_FAR;
+}
+
+
+float rSphere(vec3 o, vec3 d, vec3 c, float r)
+{
+    vec3 e= c - o;
+    float a= dot(e, d);
+    float b= r*r - dot(e,e) + a*a;
+    if(b>0.0)
+    {
+        float t = a- sqrt(b);
+        if(t>PRECISION_STEP)
+            return t;
+    }
+    return CAMERA_FAR;
+}
+
+#define tSPH(v,r,col) { vec3 sp = ((v)+vec3(-150.0,0.0,150.0))*gSCALE;mind = rSphere( ro,rd, sp ,float(r)*gSCALE);if(mind<res.x){res=vec4(mind,col); n_out =normalize((ro+rd*mind)-sp); } }
+
+
+
+// the modeling and animation updates.
+
+// we have 8 spheres per limb
+#define countA 8
+
+void tUpdateAppendage(inout vec4 res,vec3 ro,vec3 rd,vec3 p, vec3 q, vec3 w, float A, float B,inout vec3 n_out)
+{
+    vec3 V=q-p;
+    float D=length(V);
+    float inverseD = 1.00 / D;
+    V*= inverseD;
+    
+    vec3 W = normalize(w);
+    vec3 U = cross(V, W);
+    
+    float A2 = A * A;
+    
+    float y = 0.5 * inverseD * (A2 - B * B + D * D);
+    float square = A2 - y * y;
+    if (square < 0.0) {
+        return;
+    }
+    float x = sqrt(square);
+    
+    vec3 j = p+U*x+V*y;
+    float ooA=  1.0 / 8.0;
+    vec3 d= (j- p)*ooA;
+    
+    vec3 k = p;
+    float mind=res.x;
+    
+    
+    
+    for(int i = 0; i <= countA; i++)
+    {
+        float fi=float(i);
+        tSPH((k+d*fi),(2.5+2.5*fi*ooA),MAT_LIMBS);
+    }
+    
+    d= (j- q )*ooA;
+    k = q;
+    for(int i = 0; i < countA; i++)
+    {
+        tSPH((k+d*float(i)),5.0,MAT_LIMBS);
+    }
+    
+    
+}
+
+
+// the juggler sphere animation paths, taken from http://meatfighter.com/juggler/
+void juggling(inout vec3 c,float t)
+{
+    if(t<60.0)
+    {
+        c.z = JUGGLE_X1 + JUGGLE_H_VX * t;
+        c.y = JUGGLE_Y0 + ((JUGGLE_H_VY - 0.5 * JUGGLE_G * t) * t);
+    }
+    else
+    {   float h= t-60.0;
+        c.z = JUGGLE_X0 + ((JUGGLE_X1 - JUGGLE_X0)/30.0) * h;
+        c.y = JUGGLE_Y0 + (((2.0 * JUGGLE_H_H / 30.0) - 0.5 * JUGGLE_B * h) * h)*.5;
+    }
+}
+// the raytracing scene function.
+vec4 trace(in vec3 ro, in vec3 rd,out vec3 n_out)
+{   vec4 res=vec4(CAMERA_FAR,-2.0,-2.0,0.0);
+    n_out=vec3(0);
+    float mind = rPlane(ro,rd,vec4(0,1.0,0,0));
+    if(mind<res.x) { res=vec4(mind,MAT_FLOOR); n_out =vec3(0.0,1.0,0.0);}
+    
+    
+    float chkd=rAABB(ro-vec3(0,1,0),rd,vec3(0.6,1.0,0.6));
+    if(chkd<res.x)
+    {
+        float t =  mod(time*30.0,90.0);
+        vec3 pos = ro;
+        vec3 c=vec3(110.0);
+        juggling(c,t);
+        tSPH(c,14.0,MAT_MIRROR);
+        
+        juggling(c,mod(t+25.0,90.0));
+        tSPH(c,14.0,MAT_MIRROR);
+        
+        juggling(c,mod(t+55.0,90.0));
+        tSPH(c,14.0,MAT_MIRROR);
+        
+        float T =  mod(time*30.0,30.0);
+        
+        float angle = HIPS_ANGLE_MULTIPLIER * T;
+        float oscillation = 0.5 * (1.0 + cos(angle));
+        vec3 o = vec3(151.0, HIPS_MIN_Y + (HIPS_MAX_Y - HIPS_MIN_Y) * oscillation,-151.0);
+        vec3 v=normalize(vec3(0.0,70.0,(HIPS_MIN_Y - HIPS_MAX_Y) * sin(angle)) );
+        vec3 u=vec3(0.0,v.z,-v.y);
+        vec3 w=vec3(1.0,0.0,0.0);
+        vec3 k = o;
+        
+        for(int i = 0; i <= 7; i++)
+        {
+            float percent = float(i) / 7.0;
+            tSPH(( k+v*(32.0*percent)) , (16.0+4.0*percent),MAT_TORSO);
+        }
+        tSPH(o+v*70.0, 14., MAT_LIMBS);
+        tSPH(o+v*55.0, 5., MAT_LIMBS);
+        
+        vec3 p=vec3(159.0,1.5,-133.0);
+        
+#define mapYZ(o,v,w,y,z) (v*y+w*z+o)
+        vec3 q = mapYZ(o,v,u,-9.0,-16.0);
+        tUpdateAppendage(res,ro,rd, p, q, u, 42.58, 34.07,n_out);
+        
+        p=vec3( 139.0,2.5,-164.0);
+        q=mapYZ( o, v, u, -9.0, 16.0);
+        tUpdateAppendage(res,ro,rd, p, q, u, 42.58, 34.07,n_out);
+        
+        vec3 n ;
+        float armAngle = -0.35 * oscillation;
+        p.x = 69.0 + 41.0 * cos(armAngle);
+        p.y = 60.0 - 41.0 * sin(armAngle);
+        p.z = -108.0;
+        
+        q=mapYZ( o, v, u, 45.0, -19.0);
+        n=mapYZ( o, v, u, 45.41217, -19.91111);
+        n-= q;
+        tUpdateAppendage(res,ro,rd, p, q, n, 44.294, 46.098,n_out);
+        
+        p.z = -182.0;
+        q=mapYZ( o, v, u, 45.0, 19.0);
+        n=mapYZ( o, v, u, 45.41217, 19.91111);
+        n= q- n;
+        tUpdateAppendage(res,ro,rd,p, q, n, 44.294, 46.098,n_out);
+        
+        c = mapYZ( o, v, u, 69.0, -7.0);
+        c.x=142.0;
+        tSPH(c, 4.0, MAT_EYES);
+        
+        c = mapYZ( o, v, u, 69.0, 7.0);
+        c.x=142.0;
+        tSPH(c, 4.0, MAT_EYES);
+        
+        c =  o + v*71.0;
+        c.x=152.0;
+        tSPH(c, 14.0, MAT_HAIR);
+        
+    }
+    
+    return res;
+}
+
+
+vec4 castRay( in vec3 ro, in vec3 rd ,out vec3 n_out)
+{
+    float tmin = CAMERA_NEAR;
+    
+    float precis = PRECISION_STEP;
+    
+    vec3 m =  vec3(-2.0);
+    n_out =vec3(0.0);
+    vec4 traced = trace(ro,rd,n_out);
+    float tmax =min(CAMERA_FAR,traced.x);
+    float t = tmin;
+    vec4 res=vec4(CAMERA_FAR,-2.0,-2.0,0.0);
+    
+    if(traced.x < CAMERA_FAR)
+        return traced;
+    
+    
+    n_out=vec3(0);
+    m=vec3(-2.0);
+    return vec4( CAMERA_FAR, m.x,m.y,m.z );
+}
+
+
+
+vec3  LightDirection = vec3(-0.646997, 0.754829, -0.107833);
+
+vec4 render( in vec3 ro, in vec3 rd ,out vec3 pos,out vec3 nor,out vec3 ref)
+{
+    // the sky... ugly dot(viewdir,up) ..
+    float l = pow(rd.y+.21 , .3 );
+    vec3 col =mix(vec3(MAT_SKY_COLOR_A),vec3(MAT_SKY_COLOR_B), l);
+    
+    vec4 res = castRay(ro,rd,nor);
+    float t = res.x;
+    vec3 m = res.yzw;
+    float tm =1.0;
+    if( m.x>=-1.0 )
+    {
+        pos = ro + t*rd;
+        ref = reflect( rd, nor );
+        
+        if( m.x<0.0 )
+        {
+            if(m.y<=1.0)
+            {   // the floor
+                float f = mod( floor(pos.z+.5) + floor(pos.x+0.5), 2.0);
+                col = mix(vec3(1,1,0),vec3(0,1,0),f);
+                col *=mix(vec3(1,1,1),vec3(0.1,.1,.1),t/CAMERA_FAR);
+            }
+            else
+            {   // mirror ball
+                tm=-1.0;
+                col=vec3(1.0);
+            }
+        }else // solid stuff
+            col = m;
+        // lighitng calculation
+        
+        float amb = clamp( 0.5+0.5*nor.y, 0.0, 1.0 );
+        float dif = clamp( dot( nor, LightDirection ), 0.0, 1.0 );
+        float spe = pow(clamp( dot( ref, LightDirection ), 0.0, 1.0 ),16.0);
+        vec3 nnn;
+        // a shadow
+        dif *= (castRay(pos,LightDirection,nnn).x<CAMERA_FAR?0.0:1.0);
+        
+        vec3 lit = vec3(dif);
+        lit += 0.20*amb*vec3(0.50,0.50,0.60);
+        col *= lit;
+        // specular on solid stuff, no floor or mirrors
+        if(m.x>0.0)
+            col+= spe*dif;
+    }
+    
+    return vec4( col,tm );
+}
+
+// from iq code :D
+mat3 setCamera( in vec3 ro, in vec3 ta, float cr )
+{
+    vec3 cw = normalize(ta-ro);
+    vec3 cp = vec3(sin(cr), cos(cr),0.0);
+    vec3 cu = normalize( cross(cw,cp) );
+    vec3 cv = normalize( cross(cu,cw) );
+    return mat3( cu, cv, cw );
+}
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+    vec2 p = 2.0 * gl_FragCoord.xy/resolution.xy - 1.0;
+    p.x *= resolution.x / resolution.y;
+    vec2 mo = mouse.xy / resolution.xy;
+   
+    //float time =  iGlobalTime;
+    
+    // camera animation, mouse x to spin around the scene.
+    vec3 ro = vec3( -0.5+3.2*cos(0.1*time + 6.0*mo.x), .50 + 1.0, 0.5 + 3.2*sin(0.1*time + 6.0*mo.x) );
+    vec3 ta = vec3( -0.0, 1.0, 0.0 );
+    
+    // mouse y to zoom in and out a little
+    ro = ro+normalize(ta-ro)*mo.y*2.0;
+    
+    // camera-to-world transformation
+    mat3 ca = setCamera( ro, ta, 0.0 );
+    
+    // ray direction
+    vec3 rd = ca * normalize( vec3(p.xy,2.5) );
+    
+    // render
+    vec3 pos,nor,ref;
+    vec4 col = render( ro, rd ,pos,nor,ref);
+    // mirrors reflections, the first bounce
+    if(col.w<0.0)
+        col = pow(max(0.0, dot( ref, LightDirection ) ),26.0) + render( pos, ref ,pos,nor,ref);
+    // and a second one
+    if(col.w<0.0)
+        col = render( pos, ref ,pos,nor,ref);
+    
+    // gamma
+    col = pow( col, vec4(0.4545) );
+    
+    fragColor = vec4( col.xyz, 1.0 );
+    
+    // the title
+    //mainText(fragColor,fragCoord);
+}
+
+void main( void ) 
+{
+	mainImage(gl_FragColor, gl_FragCoord.xy);
+}
