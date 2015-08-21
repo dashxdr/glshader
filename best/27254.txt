@@ -1,0 +1,30 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+
+const float num = 20.0;
+float random (vec2 st) { 
+    return fract(sin(dot(st.xy,
+                         vec2(12.9898,78.233+0.0001)))* 
+        43758.5453123);
+}
+
+void main(void)
+{
+	vec2 position = (gl_FragCoord.xy / resolution.xy -0.5) * vec2(resolution.x / resolution.y, 1.0);
+	vec2 pos = vec2(fract(atan(position.y,position.x)/6.2831853),length(position));
+	float c = 1.0;
+	for (int i = 0; i < int(num); ++i)
+	{
+		float a = float(i)/num;
+		float t = time*sin(float(i)*num)*0.1+random(vec2(a,a))*float(i)*cos(float(i)*1.4);
+		float r = smoothstep(a+0.001,a,pos.y);
+		float active = r * smoothstep(0.0011,0.001,dot(position,vec2(cos(t),sin(t))));
+		c = abs(c-active);
+	}
+	gl_FragColor = vec4(c);
+}
