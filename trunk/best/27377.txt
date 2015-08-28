@@ -1,0 +1,52 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+
+#define PI 3.1415
+
+float soft_min(float a, float b, float r){
+	float e = max(r - abs(a - b), 0.0);
+	return min(a, b) - e*e*0.25 / r;
+}
+
+vec2 supershapes(vec4 n, float phi){
+	float delta = 1.0;
+	float m = n.x * phi * 0.25;
+	float t1 = pow(abs(cos(m)), n.z);
+	float t2 = pow(abs(sin(m)), n.w);
+	float radius = 1.0 / pow(t1 + t2, 1.0 / n.y);
+	return vec2(cos(phi), sin(phi)) * radius * delta;
+}
+
+vec2 supershapes(vec4 n, vec2 coord){
+	return supershapes(n, atan(coord.y, coord.x));
+}
+
+float supershapesDistance(vec4 n, vec2 coord){
+	return distance(coord, supershapes(n, coord));
+}
+
+vec2 rotate(vec2 v, vec2 cs){
+	return vec2(v.x*cs.x - v.y*cs.y, v.x*cs.y + v.y*cs.x);
+}
+
+vec4 style1(){
+	vec4 Minute = vec4(0, 0, cos(time), sin(time));
+	vec4 Hour = vec4(0, 0, cos(time/60.0), sin(time/60.0));
+	vec2 uv = (( gl_FragCoord.xy / resolution.yy ) - vec2(0.5, 0.5)) * 5.0;
+	vec2 rotMinuteUV = rotate(uv, Minute.zw) * 1.1;
+	vec2 rotHourUV = rotate(uv, Hour.zw) * 1.1;
+	float db = supershapesDistance(vec4(12.0, 0.2, 0.9, 0.9), vec2(0.0)) * 4.0;
+	float ds = supershapesDistance(vec4(1.0, 0.2, 0.8, 0.8+sin(time)*0.4), rotMinuteUV) * 4.0;
+	float dh = supershapesDistance(vec4(1.0, 1.0, 0.3, 0.3), rotHourUV) * 4.0;
+	float cc = soft_min(db, soft_min(ds, dh, 0.5), 0.5);
+	return vec4(smoothstep(0.8, 0.9, 1.0 - cc), 1.0-cc, mod(cc, 0.3)*8.0, 1.0);
+}
+
+void main() {	
+	gl_FragColor = style1();
+}
