@@ -1,0 +1,63 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+//omg des reflets
+//maintenant avec des palettes1!1!!
+#define PI 3.14159
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+float dist(vec3 pos) {
+	pos = mod(pos, 2.) - 1.;
+	return length(pos) - (sin(time * .5) + 2.) * .3;	
+}
+
+
+//http://www.iquilezles.org/www/articles/palettes/palettes.htm
+vec3 palette( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d ){
+    return a + b*cos( 6.28318*(c*t+d) );
+}
+vec3 color_from_palette(float v){
+	return palette(v, vec3(0.5, 0.5, 0.5), vec3(0.5, 0.5, 0.5), vec3(1.0, 1.0, 1.0), vec3(0.00, 0.33, 0.67));
+}
+vec3 ray(vec3 pos, vec3 dir) {
+	vec3 start = pos;
+	float d = 0.;
+	int r = 0;
+	vec2 e = vec2(.001, 0.);
+	vec3 lp = vec3(sin(time), 3, -.3);
+	vec3 col = vec3(0.);
+	float tb = 1.;
+	for(int i=0 ; i<40 ; i++) {
+		d = dist(pos);
+		if(d < .001) {
+			vec3 normal = vec3(0.);
+			normal.x += dist(pos + e.xyy) - dist(pos - e.xyy);
+			normal.y += dist(pos + e.yxy) - dist(pos - e.yxy);
+			normal.z += dist(pos + e.yyx) - dist(pos - e.yyx);
+			normal = normalize(normal);
+			r++;
+			if(r == 4) break;
+			tb = dot(normal, normalize(lp - pos));
+			float td = length(pos - start);
+			col+=color_from_palette(abs(mod(tb*(sin(td) * .5 + .5+ sin(td + PI * 2. / 3.) * .5 + .5+ sin(td + PI * 4. / 3.) * .5 + .5)*.5, 2.)-1.))*.4;
+			//col += tb * vec3(sin(td) * .5 + .5, sin(td + PI * 2.01. / 3.) * .5 + .5, sin(td + PI * 4. / 3.) * .5 + .5);
+			dir = -(2. * dot(dir, normal) * normal - dir);
+			pos += dir;
+		}
+		pos += d * dir;
+	}
+	return vec3(min(col, 1.));
+}
+void main( void ) {
+	vec2 uv = gl_FragCoord.xy / resolution.xy * 2. - 1.;
+	uv.x *= resolution.x / resolution.y;
+	vec3 pos = vec3(time*.2, 0, 0);
+	vec3 forward = normalize(vec3(cos(time*.2), sin(time*.2), 0.));
+	vec3 up = vec3(0, cos(time*.2), sin(time*.2));
+	vec3 right = cross(forward, up);
+	up = cross(right, forward);
+	vec3 dir = normalize(forward*2. + right*uv.x + up*uv.y);
+	vec3 col = ray(pos, dir);
+	gl_FragColor = vec4(col, 1.);	
+}
