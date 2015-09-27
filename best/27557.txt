@@ -1,0 +1,457 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+uniform sampler2D renderbuffer;
+
+//more fixing bugs from switchover to triangles...
+
+#define LEVELS	 	7.   
+#define THRESHOLD  	pow(2.,-8.)
+#define SOURCE		3
+#define TREE		2
+#define CLAMP
+#define DETECT_SIGN_CHANGE 
+#define DETECT_ENTROPY
+
+
+#define DEBUG
+#ifdef DEBUG
+	//#define DEBUG_UV		1.
+	//#define DEBUG_UVW		1.
+	//#define DEBUG_FACE_UV		1.
+	//#define DEBUG_FACE_UVW		.5
+	#define DEBUG_GRID		.25
+	//#define DEBUG_LATTICE		.0125
+	#define DEBUG_VERTEX		.0095
+	#define DEBUG_EDGE		.01
+	
+	//#define DEBUG_CARTESIAN
+	//#define DEBUG_NORMAL		.0025
+	//#define DEBUG_TANGENT		.0025
+	
+	//#define DEBUG_SIGN_CHANGE	1.
+	//#define DEBUG_ENTROPY		1.
+	
+	#define DEBUG_SOURCE_FUNCTION	.5
+	#define DEBUG_SOURCE_SAMPLE	.75
+
+	struct debug_global
+	{
+		float 	grid;
+		float 	normal;
+		float 	tangent;
+		float 	index;
+		float	sign_change;
+		float 	entropy;
+		float 	vertex;
+		float 	sample;
+		float	scale;
+		vec2	cartesian;
+		vec3	barycentric;
+		vec3 	edge;
+		vec3 	lattice;
+	} d = debug_global(0., 0., 0., 0., 0., 0., 0., 0., 0., vec2(0.), vec3(0.), vec3(0.), vec3(0.));
+
+
+	vec4 	debug_overlay(void);
+#endif
+
+struct face
+{
+	vec2 uv;
+	vec3 uvw;
+};
+
+struct simplex
+{
+	float 	level;
+	float 	magnitude;
+	float 	entropy;
+	
+	vec2 	uv;
+	vec3	uvw;
+	
+	vec3 	normal;
+	vec3 	difference;
+	vec3 	gradient;
+	
+	bool	inside;
+	bool 	sign_change;
+	bool 	entropy_limit;
+	
+	vec2[4]	vertex;
+	vec2[4]	parent_vertex;
+	vec4[4]	sample;
+	face face;
+}s;
+
+vec2	format(vec2 uv);
+//vec3 	format_block(vec2 uv, vec2 scale);
+vec3 	barycentric(vec2 uv, float scale);
+vec2 	cartesian(vec3 uvw, float scale);
+
+void 	sample_directed(inout simplex s);
+vec4 	sample_node(vec2 uv, float level, const int channel);
+float	line(vec2 p, vec2 a, vec2 b, float w);
+float 	map(vec2 uv);
+vec4 	clear(vec4 result);	
+float	hash(float v);
+float	interpolate(float a, float b, float x);
+float	irnd(vec2 p);
+float	fbm(vec2 p);
+
+
+void main(void) 
+{
+	s.uv			= gl_FragCoord.xy/resolution.xy;
+	float source		= map(s.uv);
+	
+	
+	
+	//v.level = LEVELS;
+	//sample_directed(v);
+	
+	vec4 result 		= vec4(0.);
+	//for(int i = int(LEVELS); i > 0; i--)
+	float error = 0.;
+	for(int i = 0; i <= int(LEVELS); i++)
+	{
+		s.level 	= float(i);
+		sample_directed(s);
+		error 		+= abs(THRESHOLD-s.magnitude) * pow(2., float(i))*2.;
+		if( error > 1.) { break; }		
+	}
+	
+	#ifdef DEBUG
+	result 			+= debug_overlay();
+	#endif
+	
+	result.w		+= source;
+
+	result 			*= clear(result);
+	gl_FragColor		= result;
+}//sphinx
+
+				
+void sample_directed(inout simplex s) 
+{
+	float power			= pow(2., s.level);
+	
+	s.uvw          		    	= barycentric(s.uv, power);
+	s.face.uvw			= fract(s.uvw);
+	s.face.uv			= cartesian(floor(s.uvw), power);
+	
+	vec2 offset			= vec2(0., .5);
+	s.vertex[0]			= s.face.uv + cartesian(offset.xyy, power);
+	s.vertex[1]			= s.face.uv + cartesian(offset.yxy, power);
+	s.vertex[2]			= s.face.uv + cartesian(offset.yyx, power);
+	
+	s.sample[0]			= texture2D(renderbuffer, s.vertex[0]);	
+	s.sample[1]			= texture2D(renderbuffer, s.vertex[1]);	
+	s.sample[2]			= texture2D(renderbuffer, s.vertex[2]);	
+	
+	
+	vec3 gradient			= vec3(0.);
+	gradient.x			= s.sample[0][SOURCE]-(s.sample[1][SOURCE]*s.sample[2][SOURCE]);
+	gradient.y			= s.sample[1][SOURCE]-(s.sample[0][SOURCE]*s.sample[2][SOURCE]);
+	gradient.z			= s.sample[2][SOURCE]-(s.sample[0][SOURCE]*s.sample[1][SOURCE]);
+	
+	vec3 difference			= abs(gradient);
+	
+	vec3 normal 			= normalize(gradient);
+	
+	float magnitude			= length(gradient);	
+	
+	s.normal 			= normal;
+//	s.gradient			= gradient;
+	s.magnitude			= magnitude;
+	s.difference			= difference;
+	
+	
+//	s.normal 			= mix(normal,		s.normal, 	1.-s.level/LEVELS);
+	s.gradient			= mix(gradient, 	s.gradient, 	difference);
+	s.magnitude			= mix(magnitude,	s.magnitude, 	length(difference));
+//	s.difference			= mix(difference, 	s.difference, 1.-s.level/LEVELS);
+	
+	vec3 target_uvw			= (s.gradient/s.magnitude/power*2.);
+
+	vec2 target_uv			= s.face.uv+cartesian(target_uvw, power);
+
+	#ifdef CLAMP
+	float bound			= power;
+	target_uv			= clamp(target_uv, s.face.uv-bound, s.face.uv+bound);
+	#endif
+	
+
+	
+	s.vertex[3] 			= target_uv;
+	
+	s.sample[3]			= texture2D(renderbuffer, s.vertex[3]);
+	
+	s.inside	 		= s.magnitude <= THRESHOLD;	
+	
+	
+	#ifdef DEBUG
+	vec2 aspect		= resolution.xy/resolution.yy;
+	float level_scale	= max(s.level * 2., .5);
+	vec2 screen_uv		= format(s.uv);
+	vec2 screen_face	= format(s.face.uv);
+	#endif
+		
+	#ifdef DEBUG_UV
+	d.cartesian 		= cartesian(s.uvw, power);
+	#endif
+
+	#ifdef DEBUG_UVW
+	d.barycentric 		= s.uvw;
+	#endif
+	
+	#ifdef DEBUG_GRID
+	d.grid			+= float(fract(s.uvw.x) < .005 || fract(s.uvw.y) < .005 || fract(s.uvw.z) < .005) * DEBUG_GRID;
+	#endif
+	
+	#ifdef DEBUG_LATTICE
+	d.scale 		= DEBUG_LATTICE/level_scale;
+	d.lattice.x		+= float(length(screen_uv-format(s.vertex[0])) < d.scale) * .75;
+	d.lattice.y		+= float(length(screen_uv-format(s.vertex[1])) < d.scale) * .75;
+	d.lattice.z		+= float(length(screen_uv-format(s.vertex[2])) < d.scale) * .75;
+	#endif
+
+	#ifdef DEBUG_VERTEX
+	d.scale 		= (LEVELS/level_scale) * DEBUG_VERTEX/LEVELS;
+	d.vertex	 	+= float(length(screen_uv-format(s.vertex[3])) < d.scale) * .75;
+	#endif	
+	
+	#ifdef DEBUG_EDGE
+	d.scale 		= DEBUG_EDGE/power;
+
+	if(s.level > 1.)
+	{
+		d.edge.x		+= line(screen_uv, format(s.parent_vertex[0]), format(s.parent_vertex[3]), d.scale) * .5;
+		d.edge.y		+= line(screen_uv, format(s.parent_vertex[1]), format(s.parent_vertex[3]), d.scale) * .5;
+		d.edge.z		+= line(screen_uv, format(s.parent_vertex[2]), format(s.parent_vertex[3]), d.scale) * .5;
+		d.edge.xy		+= line(screen_uv, format(s.parent_vertex[3]), format(s.vertex[3]), d.scale) * 1.;
+	}
+	else
+	{
+		d.edge.x		+= line(screen_uv, format(s.vertex[0]), format(s.vertex[3]), d.scale) * s.normal.x * .5;
+		d.edge.y		+= line(screen_uv, format(s.vertex[1]), format(s.vertex[3]), d.scale) * s.normal.y * .5;
+		d.edge.z		+= line(screen_uv, format(s.vertex[2]), format(s.vertex[3]), d.scale) * s.normal.z * .5;
+	}
+	
+	s.parent_vertex[0]	= s.vertex[0];
+	s.parent_vertex[1]	= s.vertex[1];
+	s.parent_vertex[2]	= s.vertex[2];
+	s.parent_vertex[3]	= s.vertex[3];
+	#endif
+	
+	#ifdef DEBUG_NORMAL
+	d.scale			 = DEBUG_NORMAL/level_scale;
+	d.normal 		+= line(screen_face-screen_uv, vec2(0.), format(cartesian(s.normal, power))*power, d.scale);
+	#endif
+
+	#ifdef DEBUG_TANGENT
+	d.scale 		= DEBUG_TANGENT/level_scale;
+	vec2 tangent		= format(cartesian(s.normal, power)).yx * vec2(-1., 1.);
+	tangent			*= power;
+	d.tangent 		+= line(screen_face-screen_uv, -tangent, tangent, d.scale);
+	#endif
+	
+	#ifdef DEBUG_SIGN_CHANGE
+	d.sign_change 		+= float(v.sign_change);
+	#endif
+			
+	#ifdef DEBUG_ENTROPY
+	d.entropy 		+= entropy/power;
+	#endif	
+	
+	#ifdef DEBUG_SOURCE_SAMPLE
+	d.sample 		+= (1.-s.sample[3][SOURCE])/LEVELS;	
+	#endif	
+	
+	#ifdef DETECT_SIGN_CHANGE 
+//	node_detected = node_detected || sign_change;
+	#endif
+}
+
+
+vec2 cartesian(vec3 uvw, float scale)
+{
+	float r		= 1.5;
+	uvw /= 2.;
+	
+	uvw.xz 		-= uvw.y;
+
+	vec2 uv 	= vec2(0.);		
+	uv.x 		=   uvw.x - uvw.z;
+	uv.y		=  -uvw.x - uvw.z;	
+	uv		/= r*2.;
+	uv 		/= scale;
+	
+	return uv;
+}
+
+
+vec3 barycentric(vec2 uv, float scale)
+{
+	
+	float r		= 1.5;
+	uv 		*= scale;		
+
+	uv.x 		*= r;	
+	uv.y		/= 2.;
+	vec3 uvw	= vec3(0.);
+	uvw.x		=  uv.x - uv.y;
+	uvw.y		=    uv.y * 2.;
+	uvw.z		=-(uv.x + uv.y);
+	
+	uvw *= 2.;
+
+	return	uvw;
+}
+
+vec2 format(vec2 uv)
+{
+	return uv * resolution.xy/resolution.yy;
+}
+
+
+vec4 clear(vec4 result)
+{
+	return mouse.x + mouse.y < .02 ? result * 0. : result;
+}
+
+
+float line(vec2 p, vec2 a, vec2 b, float w)
+{
+	if(a==b)return(0.);
+	float d = distance(a, b);
+	vec2  n = normalize(b - a);
+   	 vec2  l = vec2(0.);
+	l.x = max(abs(dot(p - a, n.yx * vec2(-1.0, 1.0))), 0.0);
+	l.y = max(abs(dot(p - a, n) - d * 0.5) - d * 0.5, 0.0);
+	return clamp(smoothstep(w, 0., l.x+l.y), 0., 1.);
+}
+
+
+float hash(float v)
+{
+    return fract(fract(v*9876.5432)*(v+v)*12345.678);
+}
+
+
+const int oct = 8;
+const float per = 0.5;
+const float PI = 3.1415926;
+const float cCorners = 1.0/16.0;
+const float cSides = 1.0/8.0;
+const float cCenter = 1.0/4.0;
+
+
+float interpolate(float a, float b, float x){
+	float f = (1.0 - cos(x*PI))*0.5;
+	return a * (1.0 - f) + b * f;
+}
+
+
+float rnd(vec2 p){
+	return fract(sin(dot(p, vec2(12.9898, 78.233)))*43758.5453);
+}
+
+
+float irnd(vec2 p){
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	vec4 v = vec4(rnd(vec2(i.x, i.y)),
+		     rnd(vec2(i.x+1.0, i.y)),
+		     rnd(vec2(i.x, i.y+1.0)),
+		     rnd(vec2(i.x+1.0, i.y+1.0)));
+	return interpolate(interpolate(v.x, v.y, f.x), interpolate(v.z, v.w, f.x), f.y);
+}
+
+
+float fbm(vec2 p){
+	float t = 0.0;
+	for(int i = 0; i < oct; i++){
+		float freq = pow(2.0, float(i));
+		float amp = pow(per, float(oct-i));
+		t += irnd(vec2(p.x/freq, p.y/freq))*amp;
+	}
+	return t;
+}
+
+
+float map(vec2 uv)
+{
+	vec2 position		= format(uv);
+	vec2 mouse_position	= format(mouse);
+	float mouse_distance	= length(position-mouse_position);
+	float noise		= fbm(time*32. + position*512.);
+	float noisy_ring	= abs(mouse_distance-noise*.5)+.045;
+	float ring		= abs(mouse_distance-.25)+.045;
+	return clamp(mouse.x < .5 ? ring : noisy_ring, 0., .9);
+}
+
+
+vec4 debug_overlay(void)
+{
+	vec4 debug = vec4(0.);
+	
+	float map 	= texture2D(renderbuffer, s.uv)[SOURCE];
+	
+		
+	#ifdef DEBUG_UV
+	debug.xy = d.cartesian * DEBUG_UV;
+	#endif
+	
+	#ifdef DEBUG_UVW
+	debug.xyz = d.barycentric * DEBUG_UVW;
+	#endif
+	
+	#ifdef DEBUG_FACE_UVW
+	debug.xyz = s.face.uvw * DEBUG_FACE_UVW;
+	#endif
+
+	#ifdef DEBUG_FACE_UV
+	debug.xy = s.face.uv;
+	#endif
+	
+	#ifdef	DEBUG_GRID 		
+	debug.xyz += d.grid;
+	#endif
+	
+	#ifdef DEBUG_LATTICE
+	debug.xyz += d.lattice.xyz;
+	#endif	
+	
+	#ifdef	DEBUG_VERTEX		
+	debug.xyz += d.vertex;
+	#endif
+	
+	#ifdef DEBUG_NORMAL
+	debug.y += d.normal;
+	#endif
+	
+	#ifdef DEBUG_TANGENT
+	debug.xyz += d.tangent * vec3(.5, .5, 1.);
+	#endif
+	
+	#ifdef DEBUG_SOURCE_FUNCTION
+	debug.y += float(map < THRESHOLD);// + ((1.-clamp(map*32., 0., 1.))*float(map*32.<1.)) * DEBUG_SOURCE_FUNCTION;
+	#endif
+	
+	#ifdef DEBUG_SOURCE_SAMPLE
+	debug.y += d.sample * DEBUG_SOURCE_SAMPLE;
+	#endif
+	
+	#ifdef DEBUG_EDGE
+	debug.xyz = max(debug.xyz, d.edge);
+	#endif
+
+	
+	return debug;
+}
