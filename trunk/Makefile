@@ -1,13 +1,28 @@
 CFLAGS = -O2 -Wall $(shell sdl-config --cflags)
 #LDFLAGS = $(shell sdl-config --libs) -lGL -lm -lavutil -lavformat -lavcodec
-LDFLAGS = $(shell sdl-config --libs) -lGL -lm
+#LDLIBS = $(shell sdl-config --libs) -lGL -lm
+LDLIBS = -lSDL -lGL -lm
+
+PCP=/opt/ffmpeg-20150915/lib/pkgconfig
+
+FFMPEG_LIBS=    libavdevice                        \
+                libavformat                        \
+                libavfilter                        \
+                libavcodec                         \
+                libswresample                      \
+                libswscale                         \
+                libavutil                          \
+
+
+CFLAGS := $(shell PKG_CONFIG_PATH=$(PCP) pkg-config --cflags $(FFMPEG_LIBS)) $(CFLAGS)
+LDLIBS := $(LDLIBS) $(shell PKG_CONFIG_PATH=$(PCP) pkg-config --libs $(FFMPEG_LIBS))
+
 
 all: glshader getall
 
-glshader:	main.o # encoder.o
-	$(CC) -o $@ $^ $(LDFLAGS)
+glshader:	main.o encoder.o
+	$(CC) $(LDFLAGS) -o $@ $^  $(LDLIBS)
 getall: getall.c
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 main.o: main.c
 
