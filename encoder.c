@@ -41,13 +41,16 @@ typedef struct OutputStream {
 
 static void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt)
 {
-	AVRational *time_base = &fmt_ctx->streams[pkt->stream_index]->time_base;
+	if(0)
+	{
+		AVRational *time_base = &fmt_ctx->streams[pkt->stream_index]->time_base;
 
-	printf("pts:%s pts_time:%s dts:%s dts_time:%s duration:%s duration_time:%s stream_index:%d\n",
-		   av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, time_base),
-		   av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, time_base),
-		   av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, time_base),
-		   pkt->stream_index);
+		printf("pts:%s pts_time:%s dts:%s dts_time:%s duration:%s duration_time:%s stream_index:%d\n",
+			av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, time_base),
+			av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, time_base),
+			av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, time_base),
+			pkt->stream_index);
+	}
 }
 
 static int write_frame(AVFormatContext *fmt_ctx, const AVRational *time_base, AVStream *st, AVPacket *pkt)
@@ -64,6 +67,7 @@ static int write_frame(AVFormatContext *fmt_ctx, const AVRational *time_base, AV
 struct videoinfo {
 	int width, height;
 	float framerate;
+	enum AVPixelFormat pixfmt;
 };
 
 /* Add an output stream. */
@@ -119,7 +123,7 @@ static void add_stream(OutputStream *ost, AVFormatContext *oc,
 	case AVMEDIA_TYPE_VIDEO:
 		c->codec_id = codec_id;
 
-		c->bit_rate = 400000;
+		c->bit_rate = 900000;
 		/* Resolution must be a multiple of two. */
 		c->width	= vi->width;
 		c->height   = vi->height;
@@ -131,7 +135,7 @@ static void add_stream(OutputStream *ost, AVFormatContext *oc,
 		c->time_base	   = ost->st->time_base;
 
 		c->gop_size	  = 12; /* emit one intra frame every twelve frames at most */
-		c->pix_fmt	   = STREAM_PIX_FMT;
+		c->pix_fmt	   = vi->pixfmt;
 		if (c->codec_id == AV_CODEC_ID_MPEG2VIDEO) {
 			/* just for testing, we also add B frames */
 			c->max_b_frames = 2;
@@ -381,17 +385,7 @@ static void open_video(AVFormatContext *oc, AVCodec *codec, OutputStream *ost, A
 		exit(1);
 	}
 
-	/* If the output format is not YUV420P, then a temporary YUV420P
-	 * picture is needed too. It is then converted to the required
-	 * output format. */
 	ost->tmp_frame = NULL;
-	if (c->pix_fmt != AV_PIX_FMT_YUV420P) {
-		ost->tmp_frame = alloc_picture(AV_PIX_FMT_YUV420P, c->width, c->height);
-		if (!ost->tmp_frame) {
-			fprintf(stderr, "Could not allocate temporary picture\n");
-			exit(1);
-		}
-	}
 }
 
 
@@ -469,18 +463,6 @@ static void close_stream(AVFormatContext *oc, OutputStream *ost)
 int encode_my_video(char *filename, int width, int height, int numframes,
 	float framerate)
 {
-
-	struct myframe aframe;
-	memset(&aframe, 0, sizeof(aframe));
-	aframe.width = width;
-	aframe.height = height;
-	aframe.linesize[0] = width;
-	aframe.linesize[1] = aframe.linesize[2] = width>>1;
-	aframe.data[0] = malloc(width*height);
-	aframe.data[1] = malloc(width*height>>1);
-	aframe.data[2] = malloc(width*height>>1);
-
-
 	OutputStream video_st = { 0 }, audio_st = { 0 };
 	AVOutputFormat *fmt;
 	AVFormatContext *oc;
@@ -522,6 +504,9 @@ int encode_my_video(char *filename, int width, int height, int numframes,
 	vi.width = width;
 	vi.height = height;
 	vi.framerate = framerate;
+	vi.pixfmt = AV_PIX_FMT_YUV420P;
+//	vi.pixfmt = AV_PIX_FMT_YUV422P;
+//	vi.pixfmt = AV_PIX_FMT_YUV444P;
 
 	/* Add the audio and video streams using the default format codecs
 	 * and initialize the codecs. */
@@ -541,7 +526,7 @@ int encode_my_video(char *filename, int width, int height, int numframes,
 	if (have_video)
 		open_video(oc, video_codec, &video_st, opt);
 
-av_dict_set(&opt, "strict", "-2", 0);
+av_dict_set(&opt, "strict", "-2", 0); // aac encoder complains about being experimental...
 	if (have_audio)
 		open_audio(oc, audio_codec, &audio_st, opt);
 
@@ -565,6 +550,35 @@ av_dict_set(&opt, "strict", "-2", 0);
 		return 1;
 	}
 
+	int halfx = 1; // whether to subsample uv in x
+	int halfy = 1; // whether to subsample uv in y
+
+	if(vi.pixfmt == AV_PIX_FMT_YUV420P)
+	{
+		halfx = 1;
+		halfy = 1;
+	} else if(vi.pixfmt == AV_PIX_FMT_YUV422P)
+	{
+		halfx = 1;
+		halfy = 0;
+	} else if(vi.pixfmt == AV_PIX_FMT_YUV444P)
+	{
+		halfx = 0;
+		halfy = 0;
+	}
+
+	int tw = halfx ? width/2 : width;
+	int th = halfy ? height/2 : height;
+	struct myframe aframe;
+	memset(&aframe, 0, sizeof(aframe));
+	aframe.width = width;
+	aframe.height = height;
+	aframe.linesize[0] = width;
+	aframe.linesize[1] = aframe.linesize[2] = tw;
+	aframe.data[0] = malloc(width*height);
+	aframe.data[1] = malloc(tw * th);
+	aframe.data[2] = malloc(tw * th);
+
 	int framecount = 0;
 	while (encode_video /*|| encode_audio*/) {
 		/* select the stream to encode */
@@ -573,21 +587,20 @@ av_dict_set(&opt, "strict", "-2", 0);
 											audio_st.next_pts, audio_st.st->codec->time_base) <= 0))
 		{
 			aframe.pts = (framecount/framerate);
-			draw_frame(&aframe);
+			draw_frame(&aframe, halfx, halfy);
 			AVFrame *frame = video_st.frame;
 			int y;
-			int w2 = width/2;
+			int tw = halfx ? width/2 : width;
 			for(y=0;y<height;++y)
 			{
 				int yoff = y*width;
 				memcpy(frame->data[0] + yoff, aframe.data[0] + yoff, width);
-				if(~y&1)
-				{
-					int y2 = y>>1;
-					int uvoff = y2*w2;
-					memcpy(frame->data[1] + uvoff, aframe.data[1] + uvoff, w2);
-					memcpy(frame->data[2] + uvoff, aframe.data[2] + uvoff, w2);
-				}
+				if(halfy && (y&1))
+					continue;
+				int ty = halfy ? y/2 : y;
+				int uvoff = ty * tw;
+				memcpy(frame->data[1] + uvoff, aframe.data[1] + uvoff, tw);
+				memcpy(frame->data[2] + uvoff, aframe.data[2] + uvoff, tw);
 			}
 
 			encode_video = !write_video_frame(oc, &video_st);

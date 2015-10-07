@@ -32,7 +32,9 @@ clean:
 	rm -f glshader getall *.o
 
 test: glshader
-	./glshader best/*.txt
+	@#./glshader best/*.txt
+	./glshader -o test.mp4 best/27314.txt
+	mplayer test.mp4
 	mediainfo test.mp4
 
 WORK = /ram
