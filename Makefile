@@ -33,7 +33,7 @@ clean:
 
 test: glshader
 	./glshader best/*.txt
-
+	mediainfo test.mp4
 
 WORK = /ram
 VER = 1.0.0
