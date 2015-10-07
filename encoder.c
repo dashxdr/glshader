@@ -67,8 +67,8 @@ int encode_my_video(char *filename, int width, int height, int numframes,
 	c->width = width;
 	c->height = height;
 	/* frames per second */
-	c->time_base = (AVRational){100,(int)(framerate * 100)};
-	/* emit one intra frame every ten frames
+	c->time_base = (AVRational){1, 24};//{(int)(90000/framerate), 90000};
+	/* emit one intra frame every so often
 	 * check frame pict_type before passing frame
 	 * to encoder, if frame->pict_type is AV_PICTURE_TYPE_I
 	 * then gop_size is ignored and the output of encoder
@@ -118,30 +118,25 @@ int encode_my_video(char *filename, int width, int height, int numframes,
 		pkt.size = 0;
 
 		fflush(stdout);
-#if 1
-		int x, y;
-		/* prepare a dummy image */
-		/* Y */
-		for (y = 0; y < c->height; y++) {
-			for (x = 0; x < c->width; x++) {
-				frame->data[0][y * frame->linesize[0] + x] = x + y + i * 3;
-			}
-		}
+		int y;
 
-		/* Cb and Cr */
-		for (y = 0; y < c->height/2; y++) {
-			for (x = 0; x < c->width/2; x++) {
-				frame->data[1][y * frame->linesize[1] + x] = 128 + y + i * 2;
-				frame->data[2][y * frame->linesize[2] + x] = 64 + x + i * 5;
-			}
-		}
-
-		frame->pts = i * (double)c->time_base.num / c->time_base.den;
-#else
-		aframe.pts = frame->pts;
+		aframe.pts = (i/framerate);
 		draw_frame(&aframe);
-#endif
+		int w2 = c->width/2;
+		for(y=0;y<c->height;++y)
+		{
+			int yoff = y*c->width;
+			memcpy(frame->data[0] + yoff, aframe.data[0] + yoff, c->width);
+			if(~y&1)
+			{
+				int y2 = y>>1;
+				int uvoff = y2*w2;
+				memcpy(frame->data[1] + uvoff, aframe.data[1] + uvoff, w2);
+				memcpy(frame->data[2] + uvoff, aframe.data[2] + uvoff, w2);
+			}
+		}
 
+		frame->pts = i;//(i/framerate) * (double)c->time_base.num / c->time_base.den;;
 		/* encode the image */
 		ret = avcodec_encode_video2(c, &pkt, frame, &got_output);
 		if (ret < 0) {

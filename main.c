@@ -874,7 +874,7 @@ int main( int argc, char *argv[] )
 		event_loop();
 	} else
 	{
-		encode_my_video("test.mp4", sizex, sizey, 1000, 24.0);
+		encode_my_video("test.mp4", 640, 480, 100, 24.0);
 	}
 	SDL_Quit();
 	return 0;
@@ -882,6 +882,11 @@ int main( int argc, char *argv[] )
 
 void draw_frame(struct myframe *f)
 {
+	int save_sizex = sizex;
+	int save_sizey = sizey;
+	sizex = f->width;
+	sizey = f->height;
+	initview(sizex, sizey);
 
 	draw(f->pts, 1);
 	unsigned char *temp = malloc(65536);
@@ -934,6 +939,9 @@ void draw_frame(struct myframe *f)
 		}
 	}
 	free(temp);
+	sizex = save_sizex;
+	sizey = save_sizey;
+	initview(sizex, sizey);
 }
 
 
