@@ -31,11 +31,15 @@ encoder.o: encoder.c
 clean:
 	rm -f glshader getall *.o
 
-test: glshader
-	@#./glshader best/*.txt
+encodetest: glshader
 	./glshader -o test.mp4 best/27314.txt
 	mplayer test.mp4
 	mediainfo test.mp4
+
+
+test: glshader
+	./glshader best/*.txt
+	@#make encodetest
 
 WORK = /ram
 VER = 1.0.0
