@@ -25,7 +25,7 @@
 
 #define CAPTION "shadermovie"
 
-char *moviename = "/tmp/shadermovie.mp4";
+char *moviename = 0;
 
 #define MAX_SHADERS 1024
 int numshaders = 0;
@@ -783,7 +783,7 @@ void helptext(char *name)
 	printf("   Options:\n");
 	printf("   -g <width>x<height>     # example: -g %dx%d (the default)\n",
 				DEFAULT_WIDTH, DEFAULT_HEIGHT);
-	printf("   -o moviename.mp4        # default: /tmp/shadermovie.mp4\n");
+	printf("   -o moviename.mp4\n");
 	exit(0);
 }
 
@@ -869,18 +869,18 @@ int main( int argc, char *argv[] )
 
 	initstuff();
 
-	if(1)
+	if(!moviename)
 	{
 		event_loop();
 	} else
 	{
-		encode_my_video("test.mp4", 640, 480, 100, 24.0);
+		encode_my_video(moviename, 640, 480, 100, 24.0);
 	}
 	SDL_Quit();
 	return 0;
 }
 
-void draw_frame(struct myframe *f)
+void draw_frame(struct myframe *f, int halfx, int halfy)
 {
 	int save_sizex = sizex;
 	int save_sizey = sizey;
@@ -914,28 +914,59 @@ void draw_frame(struct myframe *f)
 				int yval = (19595*t[0] + 38470*t[1] + 7471*t[2]) >> 16;
 				basey[x] = yval;
 			}
-		}
-		int off = (y>>1) * (w>>1);
-		unsigned char *up = f->data[1] + off;
-		unsigned char *vp = f->data[2] + off;
-
-		for(x=0;x<w;x+=2)
-		{
-			unsigned char *t = temp + x*3;
-			int r, g, b;
-			r = (t[0] + t[3] + t[w3+0] + t[w3+3])>>2;
-			g = (t[1] + t[4] + t[w3+1] + t[w3+4])>>2;
-			b = (t[2] + t[5] + t[w3+2] + t[w3+5])>>2;
-			int yval = (19595*r + 38470*g + 7471*b) >> 16;
-			int uval = 128 + (((b-yval)*37028)>>16);
-			int vval = 128 + (((r-yval)*46727)>>16);
-			if(uval<0) uval=0;
-			if(uval>255) uval=255;
-			if(vval<0) vval=0;
-			if(vval>255) vval=255;
-
-			up[x>>1] = uval;
-			vp[x>>1] = vval;
+			if(halfy && i) continue;
+			int tw = halfx ? w/2 : w;
+			int off = (halfy ? y/2 : y+i) * tw;
+			unsigned char *up = f->data[1] + off;
+			unsigned char *vp = f->data[2] + off;
+			int xstep = halfx ? 2 : 1;
+			for(x=0;x<w;x+=xstep)
+			{
+				unsigned char *t = basergb + x*3;
+				int r=0, g=0, b=0;
+				int shift = 0;
+				void addrgb(int delta)
+				{
+					r += t[delta+0];
+					g += t[delta+1];
+					b += t[delta+2];
+				}
+				addrgb(0);
+				if(halfx)
+				{
+					addrgb(3);
+					++shift;
+				}
+				if(halfy)
+				{
+					addrgb(-w3);
+					if(halfx)
+						addrgb(-w3+3);
+					++shift;
+				}
+				if(shift)
+				{
+					r>>=shift;
+					g>>=shift;
+					b>>=shift;
+				}
+				int yval = (19595*r + 38470*g + 7471*b) >> 16;
+				int uval = 128 + (((b-yval)*37028)>>16);
+				int vval = 128 + (((r-yval)*46727)>>16);
+				if(uval<0) uval=0;
+				if(uval>255) uval=255;
+				if(vval<0) vval=0;
+				if(vval>255) vval=255;
+				if(halfx)
+				{
+					up[x>>1] = uval;
+					vp[x>>1] = vval;
+				} else
+				{
+					up[x] = uval;
+					vp[x] = vval;
+				}
+			}
 		}
 	}
 	free(temp);

@@ -10,4 +10,4 @@ int encode_my_video(char *outputname, int width, int height,  int numframes,
 		float framerate);
 
 
-void draw_frame(struct myframe *f);
+void draw_frame(struct myframe *f, int halfx, int halfy);
