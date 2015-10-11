@@ -567,17 +567,10 @@ av_dict_set(&opt, "strict", "-2", 0); // aac encoder complains about being exper
 		halfy = 0;
 	}
 
-	int tw = halfx ? width/2 : width;
-	int th = halfy ? height/2 : height;
 	struct myframe aframe;
 	memset(&aframe, 0, sizeof(aframe));
 	aframe.width = width;
 	aframe.height = height;
-	aframe.linesize[0] = width;
-	aframe.linesize[1] = aframe.linesize[2] = tw;
-	aframe.data[0] = malloc(width*height);
-	aframe.data[1] = malloc(tw * th);
-	aframe.data[2] = malloc(tw * th);
 
 	int framecount = 0;
 	while (encode_video /*|| encode_audio*/) {
@@ -587,21 +580,14 @@ av_dict_set(&opt, "strict", "-2", 0); // aac encoder complains about being exper
 											audio_st.next_pts, audio_st.st->codec->time_base) <= 0))
 		{
 			aframe.pts = (framecount/framerate);
-			draw_frame(&aframe, halfx, halfy);
 			AVFrame *frame = video_st.frame;
-			int y;
-			int tw = halfx ? width/2 : width;
-			for(y=0;y<height;++y)
+			int i;
+			for(i=0;i<3;++i)
 			{
-				int yoff = y*width;
-				memcpy(frame->data[0] + yoff, aframe.data[0] + yoff, width);
-				if(halfy && (y&1))
-					continue;
-				int ty = halfy ? y/2 : y;
-				int uvoff = ty * tw;
-				memcpy(frame->data[1] + uvoff, aframe.data[1] + uvoff, tw);
-				memcpy(frame->data[2] + uvoff, aframe.data[2] + uvoff, tw);
+				aframe.data[i] = frame->data[i];
+				aframe.linesize[i] = frame->linesize[i];
 			}
+			draw_frame(&aframe, halfx, halfy);
 
 			encode_video = !write_video_frame(oc, &video_st);
 			++framecount;
