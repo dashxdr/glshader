@@ -1,0 +1,42 @@
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+
+const int maxIteration = 70;
+
+void main( void ) {
+
+	vec2 pos = (gl_FragCoord.xy / resolution.xy - 0.5) * 2.0;
+	pos.x *= resolution.x / resolution.y;
+	pos += vec2(1.65, 0.4);
+	pos /= 2.3;
+	
+	float t = time * 0.1;
+	float angle = 3.1415926535 * 0.4077;
+	float cx = -0.319 + sin(t)* 0.07;
+	float cy = -0.271 + cos(t + 10.) * 0.02;
+	float m = 0.0;
+	float intencity = 0.;
+
+	for (int i = 0; i < maxIteration; i++){
+		pos = abs(pos);
+		pos *= mat2(cos(angle), sin(angle), -sin(angle), cos(angle));
+		m = dot(pos, pos);
+		pos.x = pos.x / m + cx;
+		pos.y = pos.y / m + cy;
+		intencity = 0.4 * m;
+		if(intencity < 0.000001){
+			intencity =  float(i) / float(maxIteration);
+			break;
+		}
+	}
+	
+	vec3 color = vec3( intencity - abs(cos(t * 2.5)), 0.1 + intencity * abs(sin(t * 0.5)) * 0.8, sin( intencity + t * 3.0 ) * 0.75 );
+	color *= color;
+	color = normalize(color);
+	gl_FragColor = vec4( color * color.r, 1.0 );
+}
