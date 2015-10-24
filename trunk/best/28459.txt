@@ -1,0 +1,230 @@
+//-----------------------------------------------------
+// RollingMarbles.glsl  2015-7-2 by rubixcom
+// original:  https://www.shadertoy.com/view/XtlSDn
+// tags: raymarching, reflection, simple, soft shadow
+//-----------------------------------------------------
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform float time;
+uniform vec2 mouse;
+uniform vec2 resolution;
+
+//---------------------------------------------------------
+const int maxSteps = 80;
+const int shadowSteps = 30;
+const int reflectionSteps = 5;
+
+#define LIGHTS 1
+#define SHADOWS 
+#define REFLECTIONS
+
+const vec4 lightColor = vec4(1.0,.75,0.6,0.0); 
+const vec4 lightColor2 = vec4(0.0,1.0,0.6,0.0);
+const vec4 lightColor3 = vec4(0.75,0.0,1.0,0.0);
+
+vec3 rayVector(vec3 position, vec3 target, vec2 fragCoord)
+{
+    vec3 eye = normalize(target - position);
+    vec3 up = vec3(0., 1., 0.);
+    vec3 right = cross(eye, up);
+    up = cross(eye,right);
+
+    mat3 cameraMatrix = mat3(right.x, up.x, eye.x,
+                			 right.y, up.y, eye.y,
+                			 right.z, up.z, eye.z);
+
+    vec2 uv = fragCoord.xy / resolution.xy - vec2(.5);
+    uv.x = uv.x * resolution.x / resolution.y;
+    uv.y = -uv.y;
+    float focalDistance = 0.6 + .3 * sin(time* .25);
+    return (normalize(vec3(uv.x,uv.y,focalDistance)) * cameraMatrix) * .5;
+}
+
+vec4 textureBall (in vec2 pos)
+{
+	return vec4(step(.5,fract((pos.x+pos.y)*4.)));
+}
+
+vec4 texturePlane (in vec2 pos)
+{
+	return vec4(abs(step(0.5,fract(pos.x*3.)) - step(0.5,fract(pos.y*3.))));
+}
+
+vec4 shade(in vec3 pos, in vec3 normal, in vec3 cameraVector, in vec3 lightPos, in vec4 lightColor, in vec4 surface)
+{
+    vec3 light = normalize(lightPos - pos);
+    float dotlight = dot(normal,light);
+
+    vec3 cameraReflected = normalize(reflect(cameraVector,normal));
+    float spec = 0.0;
+    if (dot(cameraReflected,light) < 0.0)
+        spec = min(1.0,pow(dot(cameraReflected,light),2.0));
+    return (surface
+        * vec4(0.2+dotlight) * lightColor
+        + vec4(0.5*spec)) * 10.0/length(lightPos - pos); // Sphere color
+}
+
+float map(in vec3 p, in vec3 shapeLoc, out vec3 pm)	
+{
+	float bounce = 1.6*abs(sin(time + float(int(p.y/6.0) + int(p.x/6.0))));
+	pm = vec3(mod(p.x,6.0),p.y-bounce,mod(p.z,6.0)) - shapeLoc;
+	
+	return min(length(pm) - 1.8, p.y); 
+}
+	
+vec3 normal(in vec3 p, in vec3 pm)
+{
+	if (p.y < 0.1)
+	{
+		return vec3(0.,1.,0.);
+	}
+	else
+	{
+		return normalize(pm);
+	}
+}
+
+vec4 texture(in vec3 p, in vec3 pm, in mat3 rotation)
+{
+	if (p.y < 0.1)
+	{
+		return texturePlane( vec2(p.x *.1 - 3.1415 * .5 * time,p.z *.1));
+	}
+	else
+	{
+		vec3 pmr = rotation * pm; 
+		return textureBall( vec2(atan(pmr.x,pmr.z)*.20,pmr.y*.25));
+	}
+}
+
+float shadow(in vec3 ro, in vec3 rd, in vec3 shapeLoc, in vec3 lightPos)
+{
+	float res = 1.0;
+	float t = 1.0;
+    for(int i = 1; i < shadowSteps; ++i)
+    {
+        vec3 pm = vec3(0.,0.,0.);
+		vec3 p = ro + rd * t;
+		float h = map(p, shapeLoc, pm);
+		if ( h < 0.01 )
+			return 0.01;
+		
+		res = min( res, 4. * h / t);
+		t += h;
+	}
+	
+	return res;
+}
+
+vec4 reflection(in vec3 ro, in vec3 rd, in vec3 shapeLoc, in mat3 rotation, in vec3 lights[3])
+{
+    vec4 color = vec4(0.0);
+
+    float t = 1.6;
+    for(int i = 0; i < reflectionSteps; ++i)
+    {
+        vec3 p = ro + rd * t;
+        
+        vec3 pm = vec3(0.,0.,0.);
+		float d = map(p, shapeLoc, pm);
+        if(d < 0.1)
+        {
+			vec3 normal = normal(p, pm); vec4 texc = texture(p, pm, rotation);
+
+			color = (0.0
+#if (LIGHTS >= 1)
+				+ shade(p, normal, -rd, lights[0], lightColor, texc)
+#endif
+#if (LIGHTS >= 2)
+			    + shade(p, normal, -rd, lights[1], lightColor2, texc)
+#endif
+#if (LIGHTS >= 3)
+                + shade(p, normal, -rd, lights[2], lightColor3, texc)
+#endif
+			) / float(LIGHTS);
+            break;
+        }
+
+        t += d;
+    }
+
+    return color;
+}
+
+vec4 march(in vec3 ro, in vec3 rd, in vec3 shapeLoc, in mat3 rotation, in vec3 lights[3])
+{
+    vec4 color = vec4(0.0);
+
+    float t = 0.0;
+    for(int i = 0; i < maxSteps; ++i)
+    {
+        vec3 p = ro + rd * t;
+
+        vec3 pm = vec3(0.,0.,0.);
+		float d = map(p, shapeLoc, pm);
+        if (d <= 0.01)
+        {
+			vec3 normal = normal(p, pm); vec4 texc = texture(p, pm, rotation);
+
+            vec3 cameraReflected = normalize(reflect(rd, -normal));
+
+			color = (0.0
+#if (LIGHTS >= 1)
+				+ shade(p, normal, -rd, lights[0], lightColor, texc)
+	#ifdef SHADOWS
+				* shadow(p, normalize(lights[0]-p), shapeLoc, lights[0])
+	#endif
+#endif
+#if  (LIGHTS >= 2)
+				+ shade(p, normal, -rd, lights[1], lightColor2, texc)
+	#ifdef SHADOWS
+				* shadow(p, normalize(lights[1]-p), shapeLoc, lights[1])
+	#endif
+#endif
+#if  (LIGHTS >= 3)
+				+ shade(p, normal, -rd, lights[2], lightColor3, texc)
+	#ifdef SHADOWS
+				* shadow(p, normalize(lights[2]-p), shapeLoc, lights[2])
+	#endif
+#endif
+			) / float(LIGHTS)
+#ifdef REFLECTIONS
+			+ .5*reflection(p, cameraReflected, shapeLoc, rotation, lights)
+#endif
+			;
+			break;
+        }
+
+        t += d;
+    }
+    return color;
+}
+
+void main( )
+{
+    vec3 shapeLoc = vec3(3.0,1.8,3.0);
+    vec3 cameraLoc = vec3(4.0 * sin(time), 6.0 + 4.0 * sin(0.4*time) , 4.0 * cos(time)) + shapeLoc;
+    vec3 cameraTarget = shapeLoc + vec3(0.0,1.+1.*sin(time*.01),0.0);
+    vec3 lights[3];
+#if (LIGHTS >= 1)
+	lights[0] = vec3(3. + 4.0 * sin(time*2.), 16.0 + 8.0 * sin(0.4*time) , 3.+4.0 * cos(2.*time));
+#endif
+#if (LIGHTS >= 2)
+	lights[1] = vec3(3. + 4.0 * sin(time*3.), 4.0 + 4.0 * sin(0.2*time) , 3.+8.0 * cos(3.*time));
+#endif
+#if (LIGHTS >= 3)
+	lights[2] = vec3(3. + 8.0 * sin(time*4.), 4.0 + 4.0 * sin(0.1*time) , 3.+4.0 * cos(4.*time));
+#endif
+    
+    vec3 ro = cameraLoc;
+    vec3 rd = rayVector(cameraLoc, cameraTarget, gl_FragCoord.xy);
+
+    mat3 rotation = mat3(cos(time*5.),-sin(time*5.), 0.,
+                         sin(time*5.),cos(time*5.), 0.,
+                         0.,0.,1.);
+    
+    gl_FragColor = march(ro, rd, shapeLoc, rotation, lights);
+}
