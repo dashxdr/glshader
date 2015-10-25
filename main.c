@@ -874,7 +874,7 @@ int main( int argc, char *argv[] )
 		event_loop();
 	} else
 	{
-		encode_my_video(moviename, 640, 480, 100, 24.0);
+//		encode_my_video(moviename, 640, 480, 100, 24.0);
 	}
 	SDL_Quit();
 	return 0;
